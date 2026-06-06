@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { ThemeToggle } from './ThemeToggle';
+import { MobileNav } from './MobileNav';
 
 export function AppLayout() {
     return (
@@ -11,13 +12,15 @@ export function AppLayout() {
             <main className="min-w-0 flex-1">
                 <Topbar />
 
-                <div className="fixed right-4 top-4 z-50 lg:right-8">
+                <div className="fixed right-4 top-3 z-50 lg:right-8">
                     <ThemeToggle />
                 </div>
 
-                <div className="mx-auto max-w-7xl p-4 lg:p-8">
+                <div className="mx-auto max-w-7xl p-4 pb-24 lg:p-8">
                     <Outlet />
                 </div>
+
+                <MobileNav />
             </main>
         </div>
     );
