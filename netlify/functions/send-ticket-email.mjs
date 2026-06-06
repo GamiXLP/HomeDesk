@@ -4,7 +4,8 @@ import { Resend } from 'resend';
 const allowedEventTypes = new Set([
     'ticket_created',
     'comment_created',
-    'ticket_closed',
+    'ticket_updated',
+    'ticket_deleted',
 ]);
 
 const statusLabels = {
@@ -54,7 +55,7 @@ export async function handler(event) {
         }
 
         const body = JSON.parse(event.body || '{}');
-        const { eventType, ticketId, commentId } = body;
+        const { eventType, ticketId, commentId, changes = {} } = body;
 
         if (!allowedEventTypes.has(eventType) || !ticketId) {
             return jsonResponse(400, { error: 'Invalid request body.' });
@@ -126,7 +127,9 @@ export async function handler(event) {
             comment = commentData;
 
             if (comment.visibility === 'internal' && !isAdmin) {
-                return jsonResponse(403, { error: 'Only admins can send internal comment notifications.' });
+                return jsonResponse(403, {
+                    error: 'Only admins can send internal comment notifications.',
+                });
             }
         }
 
@@ -140,9 +143,13 @@ export async function handler(event) {
 
         if (ticket.assigned_to) {
             const assignedEmail = await getUserEmail(supabaseAdmin, ticket.assigned_to);
-            if (assignedEmail) recipients.add(assignedEmail);
+
+            if (assignedEmail) {
+                recipients.add(assignedEmail);
+            }
         } else {
             const fallbackAdminEmails = await getAdminEmails(supabaseAdmin, adminEmail);
+
             for (const email of fallbackAdminEmails) {
                 recipients.add(email);
             }
@@ -164,6 +171,7 @@ export async function handler(event) {
             comment,
             requesterProfile,
             appUrl,
+            changes,
         });
 
         const { error: mailError } = await resend.emails.send({
@@ -175,7 +183,10 @@ export async function handler(event) {
 
         if (mailError) {
             console.error(mailError);
-            return jsonResponse(500, { error: 'Email could not be sent.' });
+
+            return jsonResponse(500, {
+                error: 'Email could not be sent.',
+            });
         }
 
         return jsonResponse(200, {
@@ -184,6 +195,7 @@ export async function handler(event) {
         });
     } catch (error) {
         console.error(error);
+
         return jsonResponse(500, {
             error: 'Unexpected mail function error.',
         });
@@ -199,6 +211,7 @@ async function getUserEmail(supabaseAdmin, userId) {
     } = await supabaseAdmin.auth.admin.getUserById(userId);
 
     if (error || !user?.email) return null;
+
     return user.email;
 }
 
@@ -220,7 +233,10 @@ async function getAdminEmails(supabaseAdmin, adminEmailEnv) {
 
     for (const profile of data) {
         const email = await getUserEmail(supabaseAdmin, profile.id);
-        if (email) emails.push(email);
+
+        if (email) {
+            emails.push(email);
+        }
     }
 
     return emails;
@@ -235,7 +251,7 @@ function splitEmails(value) {
         .filter(Boolean);
 }
 
-function buildMail({ eventType, ticket, comment, requesterProfile, appUrl }) {
+function buildMail({ eventType, ticket, comment, requesterProfile, appUrl, changes }) {
     const ticketUrl = appUrl
         ? `${appUrl.replace(/\/$/, '')}/app/tickets/${ticket.id}`
         : '';
@@ -267,18 +283,31 @@ function buildMail({ eventType, ticket, comment, requesterProfile, appUrl }) {
         };
     }
 
+    if (eventType === 'ticket_deleted') {
+        return {
+            subject: `Ticket gelöscht: ${ticket.title}`,
+            html: layout({
+                headline: 'Ticket gelöscht',
+                intro: `${escapeHtml(requesterProfile.display_name)} hat das Ticket gelöscht.`,
+                ticket,
+                ticketUrl: '',
+            }),
+        };
+    }
+
     return {
-        subject: `Ticket abgeschlossen: ${ticket.title}`,
+        subject: `Ticket geändert: ${ticket.title}`,
         html: layout({
-            headline: 'Ticket abgeschlossen',
-            intro: `${escapeHtml(requesterProfile.display_name)} hat das Ticket als erledigt markiert.`,
+            headline: 'Ticket geändert',
+            intro: `${escapeHtml(requesterProfile.display_name)} hat das Ticket geändert.`,
             ticket,
             ticketUrl,
+            changes,
         }),
     };
 }
 
-function layout({ headline, intro, ticket, ticketUrl, comment }) {
+function layout({ headline, intro, ticket, ticketUrl, comment, changes }) {
     const status = statusLabels[ticket.status] || ticket.status;
     const priority = priorityLabels[ticket.priority] || ticket.priority;
 
@@ -330,6 +359,19 @@ function layout({ headline, intro, ticket, ticketUrl, comment }) {
             ? `<div style="border-left:4px solid #0ea5e9;background:#f0f9ff;padding:14px 16px;margin:20px 0;">
                   <p style="margin:0 0 6px;font-weight:bold;">Kommentar</p>
                   <p style="margin:0;white-space:pre-wrap;">${escapeHtml(comment.body)}</p>
+                </div>`
+            : ''
+    }
+
+          ${
+        changes && Object.keys(changes).length > 0
+            ? `<div style="border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 16px;margin:20px 0;">
+                  <p style="margin:0 0 10px;font-weight:bold;">Änderungen</p>
+                  <ul style="margin:0;padding-left:18px;">
+                    ${Object.entries(changes)
+                .map(([key, value]) => `<li><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</li>`)
+                .join('')}
+                  </ul>
                 </div>`
             : ''
     }

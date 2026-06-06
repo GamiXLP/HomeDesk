@@ -55,6 +55,8 @@ export async function updateTicketAdmin(
     id: string,
     patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area'>>,
 ) {
+  const before = await getTicket(id);
+
   const payload: Record<string, unknown> = { ...patch };
 
   if (patch.status === 'done') {
@@ -71,17 +73,33 @@ export async function updateTicketAdmin(
   if (error) throw error;
 
   const ticket = data as Ticket;
+  const changes = buildTicketChanges(before, ticket, patch);
 
-  if (patch.status === 'done') {
-    await sendTicketEmailNotification({
-      eventType: 'ticket_closed',
-      ticketId: ticket.id,
-    }).catch((notificationError) => {
-      console.warn('Ticket closed, but email notification failed:', notificationError);
-    });
-  }
+  await sendTicketEmailNotification({
+    eventType: 'ticket_updated',
+    ticketId: ticket.id,
+    changes,
+  }).catch((notificationError) => {
+    console.warn('Ticket updated, but email notification failed:', notificationError);
+  });
 
   return ticket;
+}
+
+export async function deleteTicketAdmin(id: string) {
+  await sendTicketEmailNotification({
+    eventType: 'ticket_deleted',
+    ticketId: id,
+  }).catch((notificationError) => {
+    console.warn('Ticket delete mail failed, ticket will still be deleted:', notificationError);
+  });
+
+  const { error } = await supabase
+      .from('tickets')
+      .delete()
+      .eq('id', id);
+
+  if (error) throw error;
 }
 
 export async function getComments(ticketId: string) {
@@ -127,6 +145,52 @@ export async function addComment(
 
   return comment;
 }
+
+function buildTicketChanges(
+    before: Ticket,
+    after: Ticket,
+    patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area'>>,
+) {
+  const changes: Record<string, string> = {};
+
+  if (patch.status && before.status !== after.status) {
+    changes.Status = `${statusLabels[before.status]} → ${statusLabels[after.status]}`;
+  }
+
+  if (patch.priority && before.priority !== after.priority) {
+    changes.Priorität = `${priorityLabels[before.priority]} → ${priorityLabels[after.priority]}`;
+  }
+
+  if (patch.category && before.category !== after.category) {
+    changes.Kategorie = `${before.category} → ${after.category}`;
+  }
+
+  if (patch.area && before.area !== after.area) {
+    changes.Bereich = `${before.area} → ${after.area}`;
+  }
+
+  return changes;
+}
+
+const statusLabels: Record<TicketStatus, string> = {
+  new: 'Neu',
+  seen: 'Gesehen',
+  planned: 'Geplant',
+  in_progress: 'In Bearbeitung',
+  waiting_feedback: 'Wartet auf Rückmeldung',
+  waiting_parts: 'Wartet auf Teile',
+  tested: 'Getestet',
+  done: 'Erledigt',
+  rejected: 'Abgelehnt',
+  archived: 'Archiviert',
+};
+
+const priorityLabels: Record<TicketPriority, string> = {
+  low: 'Niedrig',
+  normal: 'Normal',
+  high: 'Hoch',
+  urgent: 'Dringend',
+};
 
 export const typed = {
   status: (s: string) => s as TicketStatus,

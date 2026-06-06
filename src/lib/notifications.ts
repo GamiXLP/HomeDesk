@@ -1,11 +1,16 @@
 import { supabase } from './supabase';
 
-type TicketEmailEvent = 'ticket_created' | 'comment_created' | 'ticket_closed';
+type TicketEmailEvent =
+    | 'ticket_created'
+    | 'comment_created'
+    | 'ticket_updated'
+    | 'ticket_deleted';
 
 type TicketEmailPayload = {
     eventType: TicketEmailEvent;
     ticketId: string;
     commentId?: string;
+    changes?: Record<string, string>;
 };
 
 export async function sendTicketEmailNotification(payload: TicketEmailPayload) {

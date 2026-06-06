@@ -1,23 +1,207 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
 import { useAuth } from '../hooks/useAuth';
-import { addComment, getComments, getTicket, typed, updateTicketAdmin } from '../lib/tickets';
+import {
+  addComment,
+  deleteTicketAdmin,
+  getComments,
+  getTicket,
+  typed,
+  updateTicketAdmin,
+} from '../lib/tickets';
 import { priorityLabels, priorityOptions, statusLabels, statusOptions } from '../constants/tickets';
 import type { Ticket, TicketComment } from '../types/database';
 
 export function TicketDetailPage() {
-  const { id } = useParams(); const { user, isAdmin } = useAuth();
-  const [ticket, setTicket] = useState<Ticket | null>(null); const [comments, setComments] = useState<TicketComment[]>([]);
-  const [body, setBody] = useState(''); const [visibility, setVisibility] = useState<'public'|'internal'>('public');
-  async function reload() { if (!id) return; setTicket(await getTicket(id)); setComments(await getComments(id)); }
-  useEffect(() => { reload(); }, [id]);
-  async function adminPatch(key: 'status'|'priority', value: string) { if (!ticket) return; const next = await updateTicketAdmin(ticket.id, { [key]: key === 'status' ? typed.status(value) : typed.priority(value) }); setTicket(next); }
-  async function submitComment(e: React.FormEvent) { e.preventDefault(); if (!ticket || !user || body.trim().length === 0) return; await addComment(ticket.id, user.id, body.trim(), isAdmin ? visibility : 'public'); setBody(''); await reload(); }
-  if (!ticket) return <Card className="p-6 text-slate-500">Lade Ticket …</Card>;
-  return <div className="grid gap-6 xl:grid-cols-[1fr_360px]"><div className="space-y-6"><Card className="p-6"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-2xl font-bold">{ticket.title}</h2><p className="mt-2 text-sm text-slate-500">Erstellt am {format(new Date(ticket.created_at), 'dd.MM.yyyy HH:mm')}</p></div><div className="flex gap-2"><StatusBadge status={ticket.status}/><PriorityBadge priority={ticket.priority}/></div></div><p className="mt-6 whitespace-pre-wrap text-slate-700">{ticket.description}</p><div className="mt-6 grid gap-3 text-sm sm:grid-cols-2"><Info label="Kategorie" value={ticket.category}/><Info label="Bereich" value={ticket.area}/><Info label="Typ" value={ticket.type}/><Info label="Gerät" value={ticket.device || '—'}/><Info label="Entity-ID" value={ticket.entity_id || '—'}/><Info label="Letzte Änderung" value={format(new Date(ticket.updated_at), 'dd.MM.yyyy HH:mm')}/></div></Card><Card className="p-6"><h3 className="mb-4 text-lg font-bold">Kommentare</h3><div className="space-y-4">{comments.map(c => <div key={c.id} className="rounded-xl border border-ha-border bg-slate-50 p-4"><div className="mb-2 flex justify-between gap-2 text-xs text-slate-500"><span>{c.profiles?.display_name ?? 'Unbekannt'} {c.visibility === 'internal' && <b className="text-orange-600">Intern</b>}</span><span>{format(new Date(c.created_at), 'dd.MM.yyyy HH:mm')}</span></div><p className="whitespace-pre-wrap text-sm">{c.body}</p></div>)}</div><form onSubmit={submitComment} className="mt-5 space-y-3"><textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Antwort schreiben …" className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue" />{isAdmin && <select value={visibility} onChange={e=>setVisibility(e.target.value as 'public'|'internal')} className="rounded-xl border border-ha-border bg-white px-3 py-2 text-sm"><option value="public">Öffentlich</option><option value="internal">Intern</option></select>}<div><Button>Kommentar hinzufügen</Button></div></form></Card></div>{isAdmin && <Card className="h-fit p-6"><h3 className="mb-4 text-lg font-bold">Bearbeitung</h3><label className="text-sm font-medium">Status</label><select value={ticket.status} onChange={e=>adminPatch('status', e.target.value)} className="mb-4 mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2">{statusOptions.map(s => <option key={s} value={s}>{statusLabels[s]}</option>)}</select><label className="text-sm font-medium">Priorität</label><select value={ticket.priority} onChange={e=>adminPatch('priority', e.target.value)} className="mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2">{priorityOptions.map(p => <option key={p} value={p}>{priorityLabels[p]}</option>)}</select><p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-800">Wartet auf Teile: Bestellung oder neues Gerät nötig.</p></Card>}</div>;
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
+
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [comments, setComments] = useState<TicketComment[]>([]);
+  const [body, setBody] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
+
+  async function reload() {
+    if (!id) return;
+
+    setTicket(await getTicket(id));
+    setComments(await getComments(id));
+  }
+
+  useEffect(() => {
+    reload();
+  }, [id]);
+
+  async function adminPatch(key: 'status' | 'priority', value: string) {
+    if (!ticket) return;
+
+    const next = await updateTicketAdmin(ticket.id, {
+      [key]: key === 'status' ? typed.status(value) : typed.priority(value),
+    });
+
+    setTicket(next);
+  }
+
+  async function submitComment(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!ticket || !user || body.trim().length === 0) return;
+
+    await addComment(ticket.id, user.id, body.trim(), isAdmin ? visibility : 'public');
+
+    setBody('');
+    await reload();
+  }
+
+  async function deleteCurrentTicket() {
+    if (!ticket) return;
+
+    const confirmed = window.confirm(
+        `Ticket wirklich löschen?\n\n"${ticket.title}"\n\nDiese Aktion kann nicht rückgängig gemacht werden.`,
+    );
+
+    if (!confirmed) return;
+
+    await deleteTicketAdmin(ticket.id);
+    navigate('/app/tickets', { state: { message: 'Ticket wurde gelöscht.' } });
+  }
+
+  if (!ticket) {
+    return <Card className="p-6 text-slate-500">Lade Ticket …</Card>;
+  }
+
+  return (
+      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex flex-wrap justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold">{ticket.title}</h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Erstellt am {format(new Date(ticket.created_at), 'dd.MM.yyyy HH:mm')}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <StatusBadge status={ticket.status} />
+                <PriorityBadge priority={ticket.priority} />
+              </div>
+            </div>
+
+            <p className="mt-6 whitespace-pre-wrap text-slate-700">{ticket.description}</p>
+
+            <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+              <Info label="Kategorie" value={ticket.category} />
+              <Info label="Bereich" value={ticket.area} />
+              <Info label="Typ" value={ticket.type} />
+              <Info label="Gerät" value={ticket.device || '—'} />
+              <Info label="Entity-ID" value={ticket.entity_id || '—'} />
+              <Info label="Letzte Änderung" value={format(new Date(ticket.updated_at), 'dd.MM.yyyy HH:mm')} />
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h3 className="mb-4 text-lg font-bold">Kommentare</h3>
+
+            <div className="space-y-4">
+              {comments.map((comment) => (
+                  <div key={comment.id} className="rounded-xl border border-ha-border bg-slate-50 p-4">
+                    <div className="mb-2 flex justify-between gap-2 text-xs text-slate-500">
+                  <span>
+                    {comment.profiles?.display_name ?? 'Unbekannt'}{' '}
+                    {comment.visibility === 'internal' && <b className="text-orange-600">Intern</b>}
+                  </span>
+                      <span>{format(new Date(comment.created_at), 'dd.MM.yyyy HH:mm')}</span>
+                    </div>
+
+                    <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+                  </div>
+              ))}
+            </div>
+
+            <form onSubmit={submitComment} className="mt-5 space-y-3">
+            <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Antwort schreiben …"
+                className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue"
+            />
+
+              {isAdmin && (
+                  <select
+                      value={visibility}
+                      onChange={(e) => setVisibility(e.target.value as 'public' | 'internal')}
+                      className="rounded-xl border border-ha-border bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="public">Öffentlich</option>
+                    <option value="internal">Intern</option>
+                  </select>
+              )}
+
+              <div>
+                <Button>Kommentar hinzufügen</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+
+        {isAdmin && (
+            <Card className="h-fit p-6">
+              <h3 className="mb-4 text-lg font-bold">Bearbeitung</h3>
+
+              <label className="text-sm font-medium">Status</label>
+              <select
+                  value={ticket.status}
+                  onChange={(e) => adminPatch('status', e.target.value)}
+                  className="mb-4 mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2"
+              >
+                {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabels[status]}
+                    </option>
+                ))}
+              </select>
+
+              <label className="text-sm font-medium">Priorität</label>
+              <select
+                  value={ticket.priority}
+                  onChange={(e) => adminPatch('priority', e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2"
+              >
+                {priorityOptions.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priorityLabels[priority]}
+                    </option>
+                ))}
+              </select>
+
+              <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-800">
+                Wartet auf Teile: Bestellung oder neues Gerät nötig.
+              </p>
+
+              <button
+                  type="button"
+                  onClick={deleteCurrentTicket}
+                  className="mt-6 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+              >
+                Ticket löschen
+              </button>
+            </Card>
+        )}
+      </div>
+  );
 }
-function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="font-medium">{value}</p></div>; }
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+      <div className="rounded-xl bg-slate-50 p-3">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="font-medium">{value}</p>
+      </div>
+  );
+}
