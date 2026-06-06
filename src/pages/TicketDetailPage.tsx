@@ -72,7 +72,7 @@ export function TicketDetailPage() {
   }
 
   if (!ticket) {
-    return <Card className="p-6 text-slate-500">Lade Ticket …</Card>;
+    return <Card className="p-6 text-slate-500 dark:text-slate-400">Lade Ticket …</Card>;
   }
 
   return (
@@ -81,8 +81,8 @@ export function TicketDetailPage() {
           <Card className="p-6">
             <div className="flex flex-wrap justify-between gap-3">
               <div>
-                <h2 className="text-2xl font-bold">{ticket.title}</h2>
-                <p className="mt-2 text-sm text-slate-500">
+                <h2 className="text-2xl font-bold text-slate-950 dark:text-slate-100">{ticket.title}</h2>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                   Erstellt am {format(new Date(ticket.created_at), 'dd.MM.yyyy HH:mm')}
                 </p>
               </div>
@@ -93,7 +93,7 @@ export function TicketDetailPage() {
               </div>
             </div>
 
-            <p className="mt-6 whitespace-pre-wrap text-slate-700">{ticket.description}</p>
+            <p className="mt-6 whitespace-pre-wrap text-slate-700 dark:text-slate-300">{ticket.description}</p>
 
             <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
               <Info label="Kategorie" value={ticket.category} />
@@ -106,20 +106,25 @@ export function TicketDetailPage() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="mb-4 text-lg font-bold">Kommentare</h3>
+            <h3 className="mb-4 text-lg font-bold text-slate-950 dark:text-slate-100">Kommentare</h3>
 
             <div className="space-y-4">
               {comments.map((comment) => (
-                  <div key={comment.id} className="rounded-xl border border-ha-border bg-slate-50 p-4">
-                    <div className="mb-2 flex justify-between gap-2 text-xs text-slate-500">
+                  <div
+                      key={comment.id}
+                      className="rounded-xl border border-ha-border bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70"
+                  >
+                    <div className="mb-2 flex justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <span>
                     {comment.profiles?.display_name ?? 'Unbekannt'}{' '}
-                    {comment.visibility === 'internal' && <b className="text-orange-600">Intern</b>}
+                    {comment.visibility === 'internal' && (
+                        <b className="text-orange-600 dark:text-orange-300">Intern</b>
+                    )}
                   </span>
                       <span>{format(new Date(comment.created_at), 'dd.MM.yyyy HH:mm')}</span>
                     </div>
 
-                    <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+                    <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{comment.body}</p>
                   </div>
               ))}
             </div>
@@ -127,16 +132,16 @@ export function TicketDetailPage() {
             <form onSubmit={submitComment} className="mt-5 space-y-3">
             <textarea
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(event) => setBody(event.target.value)}
                 placeholder="Antwort schreiben …"
-                className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue"
+                className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
 
               {isAdmin && (
                   <select
                       value={visibility}
-                      onChange={(e) => setVisibility(e.target.value as 'public' | 'internal')}
-                      className="rounded-xl border border-ha-border bg-white px-3 py-2 text-sm"
+                      onChange={(event) => setVisibility(event.target.value as 'public' | 'internal')}
+                      className="rounded-xl border border-ha-border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   >
                     <option value="public">Öffentlich</option>
                     <option value="internal">Intern</option>
@@ -152,13 +157,13 @@ export function TicketDetailPage() {
 
         {isAdmin && (
             <Card className="h-fit p-6">
-              <h3 className="mb-4 text-lg font-bold">Bearbeitung</h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-950 dark:text-slate-100">Bearbeitung</h3>
 
-              <label className="text-sm font-medium">Status</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
               <select
                   value={ticket.status}
-                  onChange={(e) => adminPatch('status', e.target.value)}
-                  className="mb-4 mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2"
+                  onChange={(event) => adminPatch('status', event.target.value)}
+                  className="mb-4 mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               >
                 {statusOptions.map((status) => (
                     <option key={status} value={status}>
@@ -167,11 +172,11 @@ export function TicketDetailPage() {
                 ))}
               </select>
 
-              <label className="text-sm font-medium">Priorität</label>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Priorität</label>
               <select
                   value={ticket.priority}
-                  onChange={(e) => adminPatch('priority', e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2"
+                  onChange={(event) => adminPatch('priority', event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               >
                 {priorityOptions.map((priority) => (
                     <option key={priority} value={priority}>
@@ -180,14 +185,14 @@ export function TicketDetailPage() {
                 ))}
               </select>
 
-              <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-800">
+              <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
                 Wartet auf Teile: Bestellung oder neues Gerät nötig.
               </p>
 
               <button
                   type="button"
                   onClick={deleteCurrentTicket}
-                  className="mt-6 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  className="mt-6 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300 dark:hover:bg-red-950"
               >
                 Ticket löschen
               </button>
@@ -199,9 +204,9 @@ export function TicketDetailPage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-      <div className="rounded-xl bg-slate-50 p-3">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="font-medium">{value}</p>
+      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="font-medium text-slate-900 dark:text-slate-100">{value}</p>
       </div>
   );
 }
