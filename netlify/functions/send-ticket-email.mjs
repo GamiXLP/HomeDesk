@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 const allowedEventTypes = new Set([
     'ticket_created',
@@ -36,12 +36,17 @@ export async function handler(event) {
     try {
         const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        const resendApiKey = process.env.RESEND_API_KEY;
-        const mailFrom = process.env.MAIL_FROM;
+
+        const smtpHost = process.env.SMTP_HOST;
+        const smtpPort = Number(process.env.SMTP_PORT || 465);
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+
+        const mailFrom = process.env.MAIL_FROM || smtpUser;
         const adminEmail = process.env.ADMIN_EMAIL;
         const appUrl = process.env.APP_URL || process.env.URL || '';
 
-        if (!supabaseUrl || !serviceRoleKey || !resendApiKey || !mailFrom) {
+        if (!supabaseUrl || !serviceRoleKey || !smtpHost || !smtpUser || !smtpPass || !mailFrom) {
             return jsonResponse(500, {
                 error: 'Mail function env vars are incomplete.',
             });
@@ -67,8 +72,6 @@ export async function handler(event) {
                 autoRefreshToken: false,
             },
         });
-
-        const resend = new Resend(resendApiKey);
 
         const {
             data: { user },
@@ -148,7 +151,7 @@ export async function handler(event) {
                 recipients.add(assignedEmail);
             }
         } else {
-            const fallbackAdminEmails = await getAdminEmails(supabaseAdmin, adminEmail);
+            const fallbackAdminEmails = getAdminEmailsFromEnv(adminEmail);
 
             for (const email of fallbackAdminEmails) {
                 recipients.add(email);
@@ -174,20 +177,22 @@ export async function handler(event) {
             changes,
         });
 
-        const { error: mailError } = await resend.emails.send({
+        const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+                user: smtpUser,
+                pass: smtpPass,
+            },
+        });
+
+        await transporter.sendMail({
             from: mailFrom,
             to,
             subject: mail.subject,
             html: mail.html,
         });
-
-        if (mailError) {
-            console.error(mailError);
-
-            return jsonResponse(500, {
-                error: 'Email could not be sent.',
-            });
-        }
 
         return jsonResponse(200, {
             ok: true,
@@ -198,6 +203,7 @@ export async function handler(event) {
 
         return jsonResponse(500, {
             error: 'Unexpected mail function error.',
+            message: error?.message || String(error),
         });
     }
 }
@@ -215,37 +221,10 @@ async function getUserEmail(supabaseAdmin, userId) {
     return user.email;
 }
 
-async function getAdminEmails(supabaseAdmin, adminEmailEnv) {
-    const envEmails = splitEmails(adminEmailEnv);
+function getAdminEmailsFromEnv(adminEmailEnv) {
+    if (!adminEmailEnv) return [];
 
-    if (envEmails.length > 0) {
-        return envEmails;
-    }
-
-    const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('role', 'admin');
-
-    if (error || !data) return [];
-
-    const emails = [];
-
-    for (const profile of data) {
-        const email = await getUserEmail(supabaseAdmin, profile.id);
-
-        if (email) {
-            emails.push(email);
-        }
-    }
-
-    return emails;
-}
-
-function splitEmails(value) {
-    if (!value) return [];
-
-    return value
+    return adminEmailEnv
         .split(',')
         .map((email) => email.trim())
         .filter(Boolean);
