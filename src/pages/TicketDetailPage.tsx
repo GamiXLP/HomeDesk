@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Card } from '../components/ui/Card';
@@ -7,6 +7,9 @@ import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
 import { useAuth } from '../hooks/useAuth';
 import {
   addComment,
+  COMMENT_IMAGE_MAX_COUNT,
+  COMMENT_IMAGE_MAX_SIZE_BYTES,
+  COMMENT_IMAGE_MIME_TYPES,
   deleteTicketAdmin,
   getComments,
   getTicket,
@@ -14,17 +17,22 @@ import {
   updateTicketAdmin,
 } from '../lib/tickets';
 import { priorityLabels, priorityOptions, statusLabels, statusOptions } from '../constants/tickets';
-import type { Ticket, TicketComment } from '../types/database';
+import type { Ticket, TicketAttachment, TicketComment } from '../types/database';
 
 export function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<TicketComment[]>([]);
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
 
   async function reload() {
     if (!id) return;
@@ -47,15 +55,80 @@ export function TicketDetailPage() {
     setTicket(next);
   }
 
+  function handleFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+
+    if (files.length === 0) return;
+
+    const nextFiles = [...selectedFiles, ...files];
+
+    if (nextFiles.length > COMMENT_IMAGE_MAX_COUNT) {
+      setCommentError(`Maximal ${COMMENT_IMAGE_MAX_COUNT} Bilder pro Kommentar erlaubt.`);
+      event.target.value = '';
+      return;
+    }
+
+    for (const file of files) {
+      if (!COMMENT_IMAGE_MIME_TYPES.includes(file.type)) {
+        setCommentError(`"${file.name}" ist kein erlaubtes Bildformat. Erlaubt sind JPG, PNG und WEBP.`);
+        event.target.value = '';
+        return;
+      }
+
+      if (file.size > COMMENT_IMAGE_MAX_SIZE_BYTES) {
+        setCommentError(`"${file.name}" ist zu groß. Maximal erlaubt sind 5 MB pro Bild.`);
+        event.target.value = '';
+        return;
+      }
+    }
+
+    setCommentError(null);
+    setSelectedFiles(nextFiles);
+    event.target.value = '';
+  }
+
+  function removeSelectedFile(index: number) {
+    setSelectedFiles((files) => files.filter((_, fileIndex) => fileIndex !== index));
+  }
+
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!ticket || !user || body.trim().length === 0) return;
+    if (!ticket || !user || isSubmittingComment) return;
 
-    await addComment(ticket.id, user.id, body.trim(), isAdmin ? visibility : 'public');
+    const trimmedBody = body.trim();
 
-    setBody('');
-    await reload();
+    if (trimmedBody.length === 0 && selectedFiles.length === 0) {
+      setCommentError('Bitte schreibe einen Kommentar oder wähle mindestens ein Bild aus.');
+      return;
+    }
+
+    try {
+      setIsSubmittingComment(true);
+      setCommentError(null);
+
+      await addComment(
+          ticket.id,
+          user.id,
+          trimmedBody,
+          isAdmin ? visibility : 'public',
+          selectedFiles,
+      );
+
+      setBody('');
+      setSelectedFiles([]);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      await reload();
+    } catch (error) {
+      console.error(error);
+      setCommentError(error instanceof Error ? error.message : 'Kommentar konnte nicht gespeichert werden.');
+    } finally {
+      setIsSubmittingComment(false);
+    }
   }
 
   async function deleteCurrentTicket() {
@@ -124,7 +197,17 @@ export function TicketDetailPage() {
                       <span>{format(new Date(comment.created_at), 'dd.MM.yyyy HH:mm')}</span>
                     </div>
 
-                    <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{comment.body}</p>
+                    {comment.body.trim().length > 0 && (
+                        <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{comment.body}</p>
+                    )}
+
+                    {comment.attachments && comment.attachments.length > 0 && (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {comment.attachments.map((attachment) => (
+                              <CommentAttachmentPreview key={attachment.id} attachment={attachment} />
+                          ))}
+                        </div>
+                    )}
                   </div>
               ))}
             </div>
@@ -137,6 +220,49 @@ export function TicketDetailPage() {
                 className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
 
+              <div className="rounded-xl border border-dashed border-ha-border p-4 dark:border-slate-700">
+                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Bilder anhängen
+                </label>
+
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  JPG, PNG oder WEBP. Maximal {COMMENT_IMAGE_MAX_COUNT} Bilder, je 5 MB.
+                </p>
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={COMMENT_IMAGE_MIME_TYPES.join(',')}
+                    multiple
+                    onChange={handleFileSelection}
+                    className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-700 dark:text-slate-300 dark:file:bg-slate-100 dark:file:text-slate-900 dark:hover:file:bg-slate-300"
+                />
+
+                {selectedFiles.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {selectedFiles.map((file, index) => (
+                          <div
+                              key={`${file.name}-${file.size}-${index}`}
+                              className="flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-900"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-slate-800 dark:text-slate-100">{file.name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{formatFileSize(file.size)}</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => removeSelectedFile(index)}
+                                className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
+                            >
+                              Entfernen
+                            </button>
+                          </div>
+                      ))}
+                    </div>
+                )}
+              </div>
+
               {isAdmin && (
                   <select
                       value={visibility}
@@ -148,8 +274,14 @@ export function TicketDetailPage() {
                   </select>
               )}
 
+              {commentError && (
+                  <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                    {commentError}
+                  </p>
+              )}
+
               <div>
-                <Button>Kommentar hinzufügen</Button>
+                <Button>{isSubmittingComment ? 'Wird gespeichert …' : 'Kommentar hinzufügen'}</Button>
               </div>
             </form>
           </Card>
@@ -202,6 +334,38 @@ export function TicketDetailPage() {
   );
 }
 
+function CommentAttachmentPreview({ attachment }: { attachment: TicketAttachment }) {
+  if (!attachment.signed_url) {
+    return (
+        <div className="rounded-xl border border-ha-border bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900">
+          <p className="truncate font-medium text-slate-800 dark:text-slate-100">{attachment.file_name}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Vorschau nicht verfügbar</p>
+        </div>
+    );
+  }
+
+  return (
+      <a
+          href={attachment.signed_url}
+          target="_blank"
+          rel="noreferrer"
+          className="block rounded-xl border border-ha-border bg-white p-2 transition hover:border-sky-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-700"
+      >
+        <img
+            src={attachment.signed_url}
+            alt={attachment.file_name}
+            className="h-36 w-full rounded-lg object-cover"
+            loading="lazy"
+        />
+
+        <div className="mt-2">
+          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{attachment.file_name}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{formatFileSize(attachment.file_size)}</p>
+        </div>
+      </a>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string }) {
   return (
       <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
@@ -209,4 +373,12 @@ function Info({ label, value }: { label: string; value: string }) {
         <p className="font-medium text-slate-900 dark:text-slate-100">{value}</p>
       </div>
   );
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
