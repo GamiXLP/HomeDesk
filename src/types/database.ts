@@ -31,6 +31,19 @@ export type Ticket = {
   archived_at?: string | null;
 };
 
+export type TicketAttachment = {
+  id: string;
+  ticket_id: string;
+  comment_id?: string | null;
+  uploaded_by: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  created_at: string;
+  signed_url?: string | null;
+};
+
 export type TicketComment = {
   id: string;
   ticket_id: string;
@@ -40,4 +53,5 @@ export type TicketComment = {
   created_at: string;
   updated_at?: string | null;
   profiles?: Pick<Profile, 'display_name' | 'role'> | null;
+  attachments?: TicketAttachment[];
 };
