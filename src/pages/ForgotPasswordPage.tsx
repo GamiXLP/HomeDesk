@@ -13,7 +13,10 @@ export function ForgotPasswordPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login` });
+    const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${publicAppUrl}/login`,
+    });
     setMessage(error ? error.message : 'Wenn die Adresse existiert, wurde eine Reset-Mail gesendet.');
     setLoading(false);
   }

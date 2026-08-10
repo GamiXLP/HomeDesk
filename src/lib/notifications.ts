@@ -20,7 +20,9 @@ export async function sendTicketEmailNotification(payload: TicketEmailPayload) {
 
     if (!session) return;
 
-    const response = await fetch('/.netlify/functions/send-ticket-email', {
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+    const response = await fetch(`${apiBaseUrl}/.netlify/functions/send-ticket-email`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

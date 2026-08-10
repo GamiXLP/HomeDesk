@@ -7,9 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
@@ -22,6 +26,7 @@
     "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
