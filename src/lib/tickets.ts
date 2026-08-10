@@ -7,6 +7,7 @@ import type {
   TicketComment,
   TicketEvent,
   TicketPriority,
+  TicketRead,
   TicketStatus,
 } from '../types/database';
 
@@ -26,8 +27,14 @@ export async function getTickets() {
   return data as Ticket[];
 }
 
-export async function getTicket(id: string) {
-  const { data, error } = await supabase.from('tickets').select('*').eq('id', id).single();
+export async function getTicket(identifier: string) {
+  const normalized = identifier.trim().replace(/^HD-/i, '');
+  const query = supabase.from('tickets').select('*');
+  const request = /^\d{8}$/.test(normalized)
+    ? query.eq('ticket_number', Number(normalized)).single()
+    : query.eq('id', normalized).single();
+
+  const { data, error } = await request;
   if (error) throw error;
   return data as Ticket;
 }
@@ -91,11 +98,11 @@ export async function updateTicketAdmin(
 }
 
 export async function deleteTicketAdmin(id: string) {
-  void sendTicketEmailNotification({ eventType: 'ticket_deleted', ticketId: id }).catch(
-    (notificationError) => {
-      console.warn('Ticket delete mail failed, ticket will still be deleted:', notificationError);
-    },
-  );
+  try {
+    await sendTicketEmailNotification({ eventType: 'ticket_deleted', ticketId: id });
+  } catch (notificationError) {
+    console.warn('Ticket delete mail failed, ticket will still be deleted:', notificationError);
+  }
 
   const { error } = await supabase.from('tickets').delete().eq('id', id);
   if (error) throw error;
@@ -168,13 +175,25 @@ export async function getTicketEvents(ticketId: string) {
   return (data ?? []) as TicketEvent[];
 }
 
+export async function getTicketReads(userId: string) {
+  const { data, error } = await supabase
+    .from('ticket_reads')
+    .select('ticket_id, user_id, last_read_at')
+    .eq('user_id', userId);
+
+  if (error) throw error;
+  return (data ?? []) as TicketRead[];
+}
+
 export async function markTicketRead(ticketId: string, userId: string) {
+  const lastReadAt = new Date().toISOString();
   const { error } = await supabase.from('ticket_reads').upsert(
-    { ticket_id: ticketId, user_id: userId, last_read_at: new Date().toISOString() },
+    { ticket_id: ticketId, user_id: userId, last_read_at: lastReadAt },
     { onConflict: 'ticket_id,user_id' },
   );
 
   if (error) console.warn('Ticket read marker could not be saved:', error);
+  return lastReadAt;
 }
 
 export async function addComment(

@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { createTicket, typed } from '../lib/tickets';
 import type { TicketPriority } from '../types/database';
+import { ticketPath } from '../utils/tickets';
 
 const DRAFT_KEY = 'homedesk-new-ticket-draft-v2';
 
@@ -112,7 +113,7 @@ export function NewTicketPage() {
       });
 
       localStorage.removeItem(DRAFT_KEY);
-      navigate(`/app/tickets/${ticket.id}`, { state: { message: 'Ticket wurde erstellt.' } });
+      navigate(ticketPath(ticket), { state: { message: 'Ticket wurde erstellt.' } });
     } catch (nextError) {
       console.error(nextError);
       setError(nextError instanceof Error ? nextError.message : 'Ticket konnte nicht erstellt werden.');

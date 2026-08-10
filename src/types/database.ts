@@ -23,6 +23,8 @@ export type Profile = {
 
 export type Ticket = {
   id: string;
+  /** 8-stellige, menschenlesbare Ticketnummer. Optional bis Migration 003 ausgeführt wurde. */
+  ticket_number?: number | null;
   title: string;
   description: string;
   status: TicketStatus;
@@ -76,4 +78,10 @@ export type TicketEvent = {
   metadata?: Record<string, unknown> | null;
   internal: boolean;
   created_at: string;
+};
+
+export type TicketRead = {
+  ticket_id: string;
+  user_id: string;
+  last_read_at: string;
 };

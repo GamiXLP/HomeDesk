@@ -231,13 +231,15 @@ function getAdminEmailsFromEnv(adminEmailEnv) {
 }
 
 function buildMail({ eventType, ticket, comment, requesterProfile, appUrl, changes }) {
+    const ticketReference = ticket.ticket_number ? `HD-${ticket.ticket_number}` : 'HomeDesk Ticket';
+    const ticketIdentifier = ticket.ticket_number || ticket.id;
     const ticketUrl = appUrl
-        ? `${appUrl.replace(/\/$/, '')}/app/tickets/${ticket.id}`
+        ? `${appUrl.replace(/\/$/, '')}/app/tickets/${ticketIdentifier}`
         : '';
 
     if (eventType === 'ticket_created') {
         return {
-            subject: `Neues HomeDesk Ticket: ${ticket.title}`,
+            subject: `${ticketReference} · Neu: ${ticket.title}`,
             html: layout({
                 headline: 'Neues Ticket erstellt',
                 intro: `${escapeHtml(requesterProfile.display_name)} hat ein neues Ticket erstellt.`,
@@ -251,7 +253,7 @@ function buildMail({ eventType, ticket, comment, requesterProfile, appUrl, chang
         const isInternal = comment?.visibility === 'internal';
 
         return {
-            subject: `${isInternal ? 'Interner Kommentar' : 'Neuer Kommentar'}: ${ticket.title}`,
+            subject: `${ticketReference} · ${isInternal ? 'Interner Kommentar' : 'Neuer Kommentar'}: ${ticket.title}`,
             html: layout({
                 headline: isInternal ? 'Neuer interner Kommentar' : 'Neuer Kommentar',
                 intro: `${escapeHtml(requesterProfile.display_name)} hat einen Kommentar hinzugefügt.`,
@@ -264,7 +266,7 @@ function buildMail({ eventType, ticket, comment, requesterProfile, appUrl, chang
 
     if (eventType === 'ticket_deleted') {
         return {
-            subject: `Ticket gelöscht: ${ticket.title}`,
+            subject: `${ticketReference} · Gelöscht: ${ticket.title}`,
             html: layout({
                 headline: 'Ticket gelöscht',
                 intro: `${escapeHtml(requesterProfile.display_name)} hat das Ticket gelöscht.`,
@@ -275,7 +277,7 @@ function buildMail({ eventType, ticket, comment, requesterProfile, appUrl, chang
     }
 
     return {
-        subject: `Ticket geändert: ${ticket.title}`,
+        subject: `${ticketReference} · Geändert: ${ticket.title}`,
         html: layout({
             headline: 'Ticket geändert',
             intro: `${escapeHtml(requesterProfile.display_name)} hat das Ticket geändert.`,
@@ -306,6 +308,10 @@ function layout({ headline, intro, ticket, ticketUrl, comment, changes }) {
             <p style="margin:0 0 16px;color:#475569;white-space:pre-wrap;">${escapeHtml(ticket.description)}</p>
 
             <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              ${ticket.ticket_number ? `<tr>
+                <td style="padding:6px 0;color:#64748b;">Ticketnummer</td>
+                <td style="padding:6px 0;font-weight:bold;">HD-${escapeHtml(ticket.ticket_number)}</td>
+              </tr>` : ''}
               <tr>
                 <td style="padding:6px 0;color:#64748b;">Status</td>
                 <td style="padding:6px 0;font-weight:bold;">${escapeHtml(status)}</td>

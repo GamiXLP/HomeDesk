@@ -35,7 +35,7 @@ export function Sidebar() {
   const openCount = tickets.filter(isTicketOpen).length;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/85 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[280px] 2xl:w-[296px] shrink-0 flex-col border-r border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/85 lg:flex">
       <div className="flex h-20 items-center gap-3 px-6">
         <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-400 text-lg font-black text-white shadow-lg shadow-sky-500/20">
           H
@@ -46,7 +46,7 @@ export function Sidebar() {
             <p className="text-base font-black tracking-tight text-slate-950 dark:text-white">HomeDesk</p>
             <Sparkles size={13} className="text-sky-500" />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Smart Home Support</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Smart Home Support · 2.1</p>
         </div>
       </div>
 

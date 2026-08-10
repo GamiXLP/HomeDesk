@@ -24,6 +24,8 @@ import { Button } from '../components/ui/Button';
 import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
 import { ErrorState, LoadingState } from '../components/ui/States';
 import { useAuth } from '../hooks/useAuth';
+import { useTickets } from '../hooks/useTickets';
+import { useToast } from '../components/ui/Toast';
 import {
   addComment,
   COMMENT_IMAGE_MAX_COUNT,
@@ -34,7 +36,6 @@ import {
   getProfiles,
   getTicket,
   getTicketEvents,
-  markTicketRead,
   typed,
   updateTicketAdmin,
 } from '../lib/tickets';
@@ -48,12 +49,14 @@ import {
   statusOptions,
 } from '../constants/tickets';
 import type { Profile, Ticket, TicketAttachment, TicketComment, TicketEvent } from '../types/database';
-import { relativeTime, ticketReference } from '../utils/tickets';
+import { relativeTime, ticketPath, ticketReference } from '../utils/tickets';
 
 export function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
+  const { markRead, replaceTicket } = useTickets();
+  const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -75,30 +78,32 @@ export function TicketDetailPage() {
     try {
       if (showLoader) setLoading(true);
       setError(null);
-      const [nextTicket, nextComments, nextEvents] = await Promise.all([
-        getTicket(id),
-        getComments(id),
-        getTicketEvents(id),
+      const nextTicket = await getTicket(id);
+      const [nextComments, nextEvents] = await Promise.all([
+        getComments(nextTicket.id),
+        getTicketEvents(nextTicket.id),
       ]);
       setTicket(nextTicket);
+      replaceTicket(nextTicket);
+      if (user) void markRead(nextTicket.id);
       setComments(nextComments);
       setEvents(nextEvents);
+
+      const canonicalPath = ticketPath(nextTicket);
+      if (window.location.pathname !== canonicalPath) {
+        navigate(canonicalPath, { replace: true });
+      }
     } catch (nextError) {
       console.error(nextError);
       setError(nextError instanceof Error ? nextError.message : 'Ticket konnte nicht geladen werden.');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, navigate, replaceTicket, user?.id, markRead]);
 
   useEffect(() => {
     void reload(true);
   }, [reload]);
-
-  useEffect(() => {
-    if (!id || !user) return;
-    void markTicketRead(id, user.id);
-  }, [id, user]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -106,7 +111,8 @@ export function TicketDetailPage() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!ticket?.id) return;
+    const ticketId = ticket.id;
     let refreshTimer = 0;
     const requestRefresh = () => {
       window.clearTimeout(refreshTimer);
@@ -114,18 +120,18 @@ export function TicketDetailPage() {
     };
 
     const channel = supabase
-      .channel(`homedesk-ticket-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `id=eq.${id}` }, requestRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_comments', filter: `ticket_id=eq.${id}` }, requestRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_attachments', filter: `ticket_id=eq.${id}` }, requestRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_events', filter: `ticket_id=eq.${id}` }, requestRefresh)
+      .channel(`homedesk-ticket-${ticketId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `id=eq.${ticketId}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_comments', filter: `ticket_id=eq.${ticketId}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_attachments', filter: `ticket_id=eq.${ticketId}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_events', filter: `ticket_id=eq.${ticketId}` }, requestRefresh)
       .subscribe();
 
     return () => {
       window.clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [id, reload]);
+  }, [ticket?.id, reload]);
 
   const previewFiles = useMemo(
     () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
@@ -142,9 +148,11 @@ export function TicketDetailPage() {
       setAdminSaving(true);
       const next = await updateTicketAdmin(ticket.id, patch, ticket);
       setTicket(next);
+      replaceTicket(next);
+      showToast('Ticket aktualisiert', { message: 'Die Änderung wurde gespeichert.' });
       void getTicketEvents(ticket.id).then(setEvents);
     } catch (nextError) {
-      window.alert(nextError instanceof Error ? nextError.message : 'Änderung konnte nicht gespeichert werden.');
+      showToast('Änderung fehlgeschlagen', { message: nextError instanceof Error ? nextError.message : 'Änderung konnte nicht gespeichert werden.', tone: 'error' });
     } finally {
       setAdminSaving(false);
     }
@@ -197,6 +205,7 @@ export function TicketDetailPage() {
       setSelectedFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       await reload(false);
+      showToast('Kommentar gesendet');
     } catch (nextError) {
       console.error(nextError);
       setCommentError(nextError instanceof Error ? nextError.message : 'Kommentar konnte nicht gespeichert werden.');
@@ -217,8 +226,13 @@ export function TicketDetailPage() {
     if (!ticket) return;
     const confirmed = window.confirm(`Ticket wirklich löschen?\n\n"${ticket.title}"\n\nDiese Aktion kann nicht rückgängig gemacht werden.`);
     if (!confirmed) return;
-    await deleteTicketAdmin(ticket.id);
-    navigate('/app/tickets', { state: { message: 'Ticket wurde gelöscht.' } });
+    try {
+      await deleteTicketAdmin(ticket.id);
+      showToast('Ticket gelöscht', { message: ticketReference(ticket) });
+      navigate('/app/tickets', { state: { message: 'Ticket wurde gelöscht.' } });
+    } catch (nextError) {
+      showToast('Ticket konnte nicht gelöscht werden', { message: nextError instanceof Error ? nextError.message : undefined, tone: 'error' });
+    }
   }
 
   if (loading && !ticket) return <LoadingState rows={4} />;
@@ -428,6 +442,9 @@ function describeEvent(event: TicketEvent) {
   if (event.event_type === 'status_changed') return `Status: ${statusLabel(event.old_value)} → ${statusLabel(event.new_value)}`;
   if (event.event_type === 'priority_changed') return `Priorität: ${priorityLabel(event.old_value)} → ${priorityLabel(event.new_value)}`;
   if (event.event_type === 'category_changed') return `Kategorie: ${event.old_value ?? '—'} → ${event.new_value ?? '—'}`;
+  if (event.event_type === 'area_changed') return `Bereich: ${event.old_value ?? '—'} → ${event.new_value ?? '—'}`;
+  if (event.event_type === 'assignee_changed') return event.new_value ? 'Bearbeiter wurde geändert.' : 'Zuweisung wurde entfernt.';
+  if (event.event_type === 'comment_created') return event.internal ? 'Interner Kommentar wurde hinzugefügt.' : 'Kommentar wurde hinzugefügt.';
   return event.event_type.replace(/_/g, ' ');
 }
 

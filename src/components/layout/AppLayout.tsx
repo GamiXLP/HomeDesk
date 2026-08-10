@@ -1,8 +1,8 @@
 import { Outlet } from 'react-router-dom';
+import { TicketDataProvider } from '../../hooks/useTickets';
+import { MobileNav } from './MobileNav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { MobileNav } from './MobileNav';
-import { TicketDataProvider } from '../../hooks/useTickets';
 
 export function AppLayout() {
   return (
@@ -11,7 +11,7 @@ export function AppLayout() {
         <Sidebar />
         <main className="min-w-0 flex-1">
           <Topbar />
-          <div className="mx-auto max-w-[1480px] p-4 pb-28 sm:p-5 sm:pb-28 lg:p-8 lg:pb-10">
+          <div className="mx-auto w-full max-w-[1760px] p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-10 2xl:px-10">
             <Outlet />
           </div>
           <MobileNav />

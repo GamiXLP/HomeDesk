@@ -5,9 +5,28 @@ export function isTicketOpen(ticket: Ticket) {
   return !closedStatuses.includes(ticket.status);
 }
 
+export function ticketNumber(ticket: Ticket) {
+  return ticket.ticket_number ? String(ticket.ticket_number).padStart(8, '0') : null;
+}
+
 export function ticketReference(ticketOrId: Ticket | string) {
-  const id = typeof ticketOrId === 'string' ? ticketOrId : ticketOrId.id;
-  return `HD-${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  if (typeof ticketOrId !== 'string') {
+    const number = ticketNumber(ticketOrId);
+    if (number) return `HD-${number}`;
+    return `HD-${ticketOrId.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  }
+
+  const normalized = ticketOrId.trim().replace(/^HD-/i, '');
+  if (/^\d{8}$/.test(normalized)) return `HD-${normalized}`;
+  return `HD-${ticketOrId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
+export function ticketPath(ticket: Ticket) {
+  return `/app/tickets/${ticketNumber(ticket) ?? ticket.id}`;
+}
+
+export function normalizeTicketIdentifier(value: string) {
+  return value.trim().replace(/^HD-/i, '');
 }
 
 export function priorityWeight(priority: TicketPriority) {
@@ -32,10 +51,18 @@ export function relativeTime(date: string) {
   );
 }
 
+export function friendlyDisplayName(value?: string | null) {
+  if (!value) return 'zurück';
+  const firstPart = value.trim().split(/[\s._-]+/).filter(Boolean)[0] ?? value;
+  return firstPart.charAt(0).toLocaleUpperCase('de-DE') + firstPart.slice(1);
+}
+
 export function sortTicketsByAttention(tickets: Ticket[]) {
   return [...tickets].sort((a, b) => {
     const priority = priorityWeight(b.priority) - priorityWeight(a.priority);
     if (priority !== 0) return priority;
+    if (a.status === 'new' && b.status !== 'new') return -1;
+    if (b.status === 'new' && a.status !== 'new') return 1;
     return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
   });
 }
