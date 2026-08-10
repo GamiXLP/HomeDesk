@@ -1,5 +1,15 @@
 export type Role = 'admin' | 'user';
-export type TicketStatus = 'new' | 'seen' | 'planned' | 'in_progress' | 'waiting_feedback' | 'waiting_parts' | 'tested' | 'done' | 'rejected' | 'archived';
+export type TicketStatus =
+  | 'new'
+  | 'seen'
+  | 'planned'
+  | 'in_progress'
+  | 'waiting_feedback'
+  | 'waiting_parts'
+  | 'tested'
+  | 'done'
+  | 'rejected'
+  | 'archived';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type CommentVisibility = 'public' | 'internal';
 
@@ -54,4 +64,16 @@ export type TicketComment = {
   updated_at?: string | null;
   profiles?: Pick<Profile, 'display_name' | 'role'> | null;
   attachments?: TicketAttachment[];
+};
+
+export type TicketEvent = {
+  id: string;
+  ticket_id: string;
+  actor_id?: string | null;
+  event_type: string;
+  old_value?: string | null;
+  new_value?: string | null;
+  metadata?: Record<string, unknown> | null;
+  internal: boolean;
+  created_at: string;
 };

@@ -1,9 +1,28 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import {
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  Clock3,
+  Copy,
+  Cpu,
+  ExternalLink,
+  History,
+  ImagePlus,
+  MapPin,
+  MessageSquare,
+  RefreshCw,
+  Send,
+  Tag,
+  Trash2,
+  UserRound,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
+import { ErrorState, LoadingState } from '../components/ui/States';
 import { useAuth } from '../hooks/useAuth';
 import {
   addComment,
@@ -12,56 +31,130 @@ import {
   COMMENT_IMAGE_MIME_TYPES,
   deleteTicketAdmin,
   getComments,
+  getProfiles,
   getTicket,
+  getTicketEvents,
+  markTicketRead,
   typed,
   updateTicketAdmin,
 } from '../lib/tickets';
-import { priorityLabels, priorityOptions, statusLabels, statusOptions } from '../constants/tickets';
-import type { Ticket, TicketAttachment, TicketComment } from '../types/database';
+import { supabase } from '../lib/supabase';
+import {
+  areas,
+  categories,
+  priorityLabels,
+  priorityOptions,
+  statusLabels,
+  statusOptions,
+} from '../constants/tickets';
+import type { Profile, Ticket, TicketAttachment, TicketComment, TicketEvent } from '../types/database';
+import { relativeTime, ticketReference } from '../utils/tickets';
 
 export function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<TicketComment[]>([]);
+  const [events, setEvents] = useState<TicketEvent[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [copied, setCopied] = useState<'link' | 'ref' | null>(null);
 
-  async function reload() {
+  const reload = useCallback(async (showLoader = false) => {
     if (!id) return;
-
-    setTicket(await getTicket(id));
-    setComments(await getComments(id));
-  }
-
-  useEffect(() => {
-    reload();
+    try {
+      if (showLoader) setLoading(true);
+      setError(null);
+      const [nextTicket, nextComments, nextEvents] = await Promise.all([
+        getTicket(id),
+        getComments(id),
+        getTicketEvents(id),
+      ]);
+      setTicket(nextTicket);
+      setComments(nextComments);
+      setEvents(nextEvents);
+    } catch (nextError) {
+      console.error(nextError);
+      setError(nextError instanceof Error ? nextError.message : 'Ticket konnte nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  async function adminPatch(key: 'status' | 'priority', value: string) {
-    if (!ticket) return;
+  useEffect(() => {
+    void reload(true);
+  }, [reload]);
 
-    const next = await updateTicketAdmin(ticket.id, {
-      [key]: key === 'status' ? typed.status(value) : typed.priority(value),
-    });
+  useEffect(() => {
+    if (!id || !user) return;
+    void markTicketRead(id, user.id);
+  }, [id, user]);
 
-    setTicket(next);
+  useEffect(() => {
+    if (!isAdmin) return;
+    void getProfiles().then(setProfiles).catch((nextError) => console.warn('Profiles could not be loaded:', nextError));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!id) return;
+    let refreshTimer = 0;
+    const requestRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void reload(false), 180);
+    };
+
+    const channel = supabase
+      .channel(`homedesk-ticket-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `id=eq.${id}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_comments', filter: `ticket_id=eq.${id}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_attachments', filter: `ticket_id=eq.${id}` }, requestRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_events', filter: `ticket_id=eq.${id}` }, requestRefresh)
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [id, reload]);
+
+  const previewFiles = useMemo(
+    () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [selectedFiles],
+  );
+
+  useEffect(() => () => previewFiles.forEach((item) => URL.revokeObjectURL(item.url)), [previewFiles]);
+
+  async function adminPatch(
+    patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to'>>,
+  ) {
+    if (!ticket || adminSaving) return;
+    try {
+      setAdminSaving(true);
+      const next = await updateTicketAdmin(ticket.id, patch, ticket);
+      setTicket(next);
+      void getTicketEvents(ticket.id).then(setEvents);
+    } catch (nextError) {
+      window.alert(nextError instanceof Error ? nextError.message : 'Änderung konnte nicht gespeichert werden.');
+    } finally {
+      setAdminSaving(false);
+    }
   }
 
   function handleFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-
     if (files.length === 0) return;
 
     const nextFiles = [...selectedFiles, ...files];
-
     if (nextFiles.length > COMMENT_IMAGE_MAX_COUNT) {
       setCommentError(`Maximal ${COMMENT_IMAGE_MAX_COUNT} Bilder pro Kommentar erlaubt.`);
       event.target.value = '';
@@ -74,7 +167,6 @@ export function TicketDetailPage() {
         event.target.value = '';
         return;
       }
-
       if (file.size > COMMENT_IMAGE_MAX_SIZE_BYTES) {
         setCommentError(`"${file.name}" ist zu groß. Maximal erlaubt sind 5 MB pro Bild.`);
         event.target.value = '';
@@ -87,298 +179,287 @@ export function TicketDetailPage() {
     event.target.value = '';
   }
 
-  function removeSelectedFile(index: number) {
-    setSelectedFiles((files) => files.filter((_, fileIndex) => fileIndex !== index));
-  }
-
-  async function submitComment(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function submitComment(event: React.FormEvent) {
+    event.preventDefault();
     if (!ticket || !user || isSubmittingComment) return;
 
     const trimmedBody = body.trim();
-
-    if (trimmedBody.length === 0 && selectedFiles.length === 0) {
-      setCommentError('Bitte schreibe einen Kommentar oder wähle mindestens ein Bild aus.');
+    if (!trimmedBody && selectedFiles.length === 0) {
+      setCommentError('Bitte schreibe einen Kommentar oder hänge mindestens ein Bild an.');
       return;
     }
 
     try {
       setIsSubmittingComment(true);
       setCommentError(null);
-
-      await addComment(
-          ticket.id,
-          user.id,
-          trimmedBody,
-          isAdmin ? visibility : 'public',
-          selectedFiles,
-      );
-
+      await addComment(ticket.id, user.id, trimmedBody, isAdmin ? visibility : 'public', selectedFiles);
       setBody('');
       setSelectedFiles([]);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
-      await reload();
-    } catch (error) {
-      console.error(error);
-      setCommentError(error instanceof Error ? error.message : 'Kommentar konnte nicht gespeichert werden.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await reload(false);
+    } catch (nextError) {
+      console.error(nextError);
+      setCommentError(nextError instanceof Error ? nextError.message : 'Kommentar konnte nicht gespeichert werden.');
     } finally {
       setIsSubmittingComment(false);
     }
   }
 
+  async function copyValue(kind: 'link' | 'ref') {
+    if (!ticket) return;
+    const value = kind === 'link' ? window.location.href : ticketReference(ticket);
+    await navigator.clipboard.writeText(value);
+    setCopied(kind);
+    window.setTimeout(() => setCopied(null), 1400);
+  }
+
   async function deleteCurrentTicket() {
     if (!ticket) return;
-
-    const confirmed = window.confirm(
-        `Ticket wirklich löschen?\n\n"${ticket.title}"\n\nDiese Aktion kann nicht rückgängig gemacht werden.`,
-    );
-
+    const confirmed = window.confirm(`Ticket wirklich löschen?\n\n"${ticket.title}"\n\nDiese Aktion kann nicht rückgängig gemacht werden.`);
     if (!confirmed) return;
-
     await deleteTicketAdmin(ticket.id);
     navigate('/app/tickets', { state: { message: 'Ticket wurde gelöscht.' } });
   }
 
-  if (!ticket) {
-    return <Card className="p-6 text-slate-500 dark:text-slate-400">Lade Ticket …</Card>;
-  }
+  if (loading && !ticket) return <LoadingState rows={4} />;
+  if (error && !ticket) return <ErrorState message={error} onRetry={() => void reload(true)} />;
+  if (!ticket) return <ErrorState message="Ticket wurde nicht gefunden." />;
+
+  const assignedProfile = profiles.find((profile) => profile.id === ticket.assigned_to);
 
   return (
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex flex-wrap justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-950 dark:text-slate-100">{ticket.title}</h2>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Erstellt am {format(new Date(ticket.created_at), 'dd.MM.yyyy HH:mm')}
-                </p>
-              </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to="/app/tickets" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">
+          <ArrowLeft size={16} /> Alle Tickets
+        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => void copyValue('ref')}>
+            {copied === 'ref' ? <Check size={14} /> : <Copy size={14} />} {ticketReference(ticket)}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void copyValue('link')}>
+            {copied === 'link' ? <Check size={14} /> : <ExternalLink size={14} />} Link
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => void reload(false)} title="Aktualisieren">
+            <RefreshCw size={17} />
+          </Button>
+        </div>
+      </div>
 
-              <div className="flex gap-2">
-                <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <main className="space-y-6">
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-100 p-6 sm:p-8 dark:border-slate-800">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                    <span>{ticketReference(ticket)}</span>
+                    <span>•</span>
+                    <span>{ticket.type}</span>
+                    <span>•</span>
+                    <span>{relativeTime(ticket.updated_at)} aktualisiert</span>
+                  </div>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">{ticket.title}</h2>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2"><StatusBadge status={ticket.status} /><PriorityBadge priority={ticket.priority} /></div>
               </div>
+              <p className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-slate-700 dark:text-slate-300">{ticket.description}</p>
             </div>
 
-            <p className="mt-6 whitespace-pre-wrap text-slate-700 dark:text-slate-300">{ticket.description}</p>
-
-            <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-              <Info label="Kategorie" value={ticket.category} />
-              <Info label="Bereich" value={ticket.area} />
-              <Info label="Typ" value={ticket.type} />
-              <Info label="Gerät" value={ticket.device || '—'} />
-              <Info label="Entity-ID" value={ticket.entity_id || '—'} />
-              <Info label="Letzte Änderung" value={format(new Date(ticket.updated_at), 'dd.MM.yyyy HH:mm')} />
+            <div className="grid gap-px bg-slate-100 sm:grid-cols-2 lg:grid-cols-3 dark:bg-slate-800">
+              <Info icon={Tag} label="Kategorie" value={ticket.category} />
+              <Info icon={MapPin} label="Bereich" value={ticket.area} />
+              <Info icon={Cpu} label="Gerät" value={ticket.device || 'Nicht angegeben'} />
+              <Info icon={Cpu} label="Entity-ID" value={ticket.entity_id || 'Nicht angegeben'} mono />
+              <Info icon={CalendarDays} label="Wunschdatum" value={ticket.desired_date ? formatDate(ticket.desired_date) : 'Kein Wunschdatum'} />
+              <Info icon={Clock3} label="Erstellt" value={formatDateTime(ticket.created_at)} />
             </div>
           </Card>
 
-          <Card className="p-6">
-            <h3 className="mb-4 text-lg font-bold text-slate-950 dark:text-slate-100">Kommentare</h3>
-
-            <div className="space-y-4">
-              {comments.map((comment) => (
-                  <div
-                      key={comment.id}
-                      className="rounded-xl border border-ha-border bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70"
-                  >
-                    <div className="mb-2 flex justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <span>
-                    {comment.profiles?.display_name ?? 'Unbekannt'}{' '}
-                    {comment.visibility === 'internal' && (
-                        <b className="text-orange-600 dark:text-orange-300">Intern</b>
-                    )}
-                  </span>
-                      <span>{format(new Date(comment.created_at), 'dd.MM.yyyy HH:mm')}</span>
-                    </div>
-
-                    {comment.body.trim().length > 0 && (
-                        <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{comment.body}</p>
-                    )}
-
-                    {comment.attachments && comment.attachments.length > 0 && (
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {comment.attachments.map((attachment) => (
-                              <CommentAttachmentPreview key={attachment.id} attachment={attachment} />
-                          ))}
-                        </div>
-                    )}
-                  </div>
-              ))}
+          <Card className="p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300"><MessageSquare size={19} /></div>
+                <div><h3 className="font-black text-slate-950 dark:text-white">Kommunikation</h3><p className="text-xs text-slate-500">{comments.length} Kommentar{comments.length === 1 ? '' : 'e'}</p></div>
+              </div>
             </div>
 
-            <form onSubmit={submitComment} className="mt-5 space-y-3">
-            <textarea
-                value={body}
-                onChange={(event) => setBody(event.target.value)}
-                placeholder="Antwort schreiben …"
-                className="min-h-28 w-full rounded-xl border border-ha-border px-4 py-3 outline-none focus:border-ha-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
+            <div className="mt-6 space-y-4">
+              {comments.length === 0 && <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400 dark:border-slate-700">Noch keine Kommentare. Starte die Unterhaltung unten.</div>}
+              {comments.map((comment) => <Comment key={comment.id} comment={comment} />)}
+            </div>
 
-              <div className="rounded-xl border border-dashed border-ha-border p-4 dark:border-slate-700">
-                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Bilder anhängen
-                </label>
+            <form onSubmit={submitComment} className="mt-6 rounded-3xl bg-slate-50 p-4 dark:bg-slate-950/50 sm:p-5">
+              <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Antwort schreiben …" className="min-h-28 w-full resize-y border-0 bg-transparent p-0 text-sm leading-6 outline-none focus:ring-0 dark:bg-transparent" />
 
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  JPG, PNG oder WEBP. Maximal {COMMENT_IMAGE_MAX_COUNT} Bilder, je 5 MB.
-                </p>
-
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={COMMENT_IMAGE_MIME_TYPES.join(',')}
-                    multiple
-                    onChange={handleFileSelection}
-                    className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-700 dark:text-slate-300 dark:file:bg-slate-100 dark:file:text-slate-900 dark:hover:file:bg-slate-300"
-                />
-
-                {selectedFiles.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {selectedFiles.map((file, index) => (
-                          <div
-                              key={`${file.name}-${file.size}-${index}`}
-                              className="flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-900"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-slate-800 dark:text-slate-100">{file.name}</p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">{formatFileSize(file.size)}</p>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => removeSelectedFile(index)}
-                                className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
-                            >
-                              Entfernen
-                            </button>
-                          </div>
-                      ))}
+              {previewFiles.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                  {previewFiles.map(({ file, url }, index) => (
+                    <div key={`${file.name}-${index}`} className="group relative overflow-hidden rounded-2xl bg-slate-200 dark:bg-slate-800">
+                      <img src={url} alt={file.name} className="h-28 w-full object-cover" />
+                      <button type="button" onClick={() => setSelectedFiles((files) => files.filter((_, fileIndex) => fileIndex !== index))} className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-white opacity-90 transition hover:bg-red-500"><X size={14} /></button>
                     </div>
-                )}
-              </div>
-
-              {isAdmin && (
-                  <select
-                      value={visibility}
-                      onChange={(event) => setVisibility(event.target.value as 'public' | 'internal')}
-                      className="rounded-xl border border-ha-border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    <option value="public">Öffentlich</option>
-                    <option value="internal">Intern</option>
-                  </select>
+                  ))}
+                </div>
               )}
 
-              {commentError && (
-                  <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/60 dark:text-red-300">
-                    {commentError}
-                  </p>
-              )}
+              {commentError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">{commentError}</p>}
 
-              <div>
-                <Button>{isSubmittingComment ? 'Wird gespeichert …' : 'Kommentar hinzufügen'}</Button>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input ref={fileInputRef} type="file" accept={COMMENT_IMAGE_MIME_TYPES.join(',')} multiple onChange={handleFileSelection} className="hidden" />
+                  <Button type="button" variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} disabled={selectedFiles.length >= COMMENT_IMAGE_MAX_COUNT}>
+                    <ImagePlus size={15} /> Bild
+                  </Button>
+                  {isAdmin && (
+                    <select value={visibility} onChange={(event) => setVisibility(event.target.value as 'public' | 'internal')} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">
+                      <option value="public">Öffentlich</option>
+                      <option value="internal">Intern</option>
+                    </select>
+                  )}
+                  <span className="hidden text-[11px] text-slate-400 sm:inline">max. {COMMENT_IMAGE_MAX_COUNT} Bilder · je 5 MB</span>
+                </div>
+                <Button size="sm" disabled={isSubmittingComment}>
+                  <Send size={15} /> {isSubmittingComment ? 'Sendet …' : 'Senden'}
+                </Button>
               </div>
             </form>
           </Card>
-        </div>
 
-        {isAdmin && (
-            <Card className="h-fit p-6">
-              <h3 className="mb-4 text-lg font-bold text-slate-950 dark:text-slate-100">Bearbeitung</h3>
+          <Card className="p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-300"><History size={19} /></div>
+              <div><h3 className="font-black text-slate-950 dark:text-white">Aktivitätsverlauf</h3><p className="text-xs text-slate-500">Automatisch aus Ticket-Events</p></div>
+            </div>
+            <div className="mt-6 space-y-1">
+              {events.length === 0 ? <p className="text-sm text-slate-400">Noch keine Historie vorhanden.</p> : events.map((event, index) => <EventRow key={event.id} event={event} last={index === events.length - 1} />)}
+            </div>
+          </Card>
+        </main>
 
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Status</label>
-              <select
-                  value={ticket.status}
-                  onChange={(event) => adminPatch('status', event.target.value)}
-                  className="mb-4 mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                {statusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {statusLabels[status]}
-                    </option>
-                ))}
-              </select>
+        {isAdmin ? (
+          <aside className="space-y-4 xl:sticky xl:top-28 xl:h-fit">
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-sky-500">Bearbeitung</p><h3 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Ticket steuern</h3></div>{adminSaving && <RefreshCw size={16} className="animate-spin text-sky-500" />}</div>
 
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Priorität</label>
-              <select
-                  value={ticket.priority}
-                  onChange={(event) => adminPatch('priority', event.target.value)}
-                  className="mt-1 w-full rounded-xl border border-ha-border bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                {priorityOptions.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priorityLabels[priority]}
-                    </option>
-                ))}
-              </select>
+              <div className="mt-5 space-y-4">
+                <AdminSelect label="Status" value={ticket.status} disabled={adminSaving} onChange={(value) => void adminPatch({ status: typed.status(value) })}>
+                  {statusOptions.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
+                </AdminSelect>
+                <AdminSelect label="Priorität" value={ticket.priority} disabled={adminSaving} onChange={(value) => void adminPatch({ priority: typed.priority(value) })}>
+                  {priorityOptions.map((priority) => <option key={priority} value={priority}>{priorityLabels[priority]}</option>)}
+                </AdminSelect>
+                <AdminSelect label="Bereich" value={ticket.area} disabled={adminSaving} onChange={(value) => void adminPatch({ area: value })}>
+                  {areas.map((area) => <option key={area}>{area}</option>)}
+                </AdminSelect>
+                <AdminSelect label="Kategorie" value={ticket.category} disabled={adminSaving} onChange={(value) => void adminPatch({ category: value })}>
+                  {categories.map((category) => <option key={category}>{category}</option>)}
+                </AdminSelect>
+                <AdminSelect label="Zugewiesen an" value={ticket.assigned_to ?? ''} disabled={adminSaving} onChange={(value) => void adminPatch({ assigned_to: value || null })}>
+                  <option value="">Nicht zugewiesen</option>
+                  {profiles.filter((profile) => profile.role === 'admin').map((profile) => <option key={profile.id} value={profile.id}>{profile.display_name}</option>)}
+                </AdminSelect>
+              </div>
 
-              <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
-                Wartet auf Teile: Bestellung oder neues Gerät nötig.
-              </p>
+              {assignedProfile && <div className="mt-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/70"><UserRound size={17} className="text-slate-400" /><div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Bearbeiter</p><p className="text-sm font-bold text-slate-900 dark:text-white">{assignedProfile.display_name}</p></div></div>}
+            </Card>
 
-              <button
-                  type="button"
-                  onClick={deleteCurrentTicket}
-                  className="mt-6 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300 dark:hover:bg-red-950"
-              >
-                Ticket löschen
+            <Card className="p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Lebenszyklus</p>
+              <div className="mt-4 space-y-3 text-xs text-slate-500 dark:text-slate-400">
+                <SideInfo label="Erstellt" value={formatDateTime(ticket.created_at)} />
+                <SideInfo label="Letzte Änderung" value={formatDateTime(ticket.updated_at)} />
+                <SideInfo label="Geschlossen" value={ticket.closed_at ? formatDateTime(ticket.closed_at) : '—'} />
+              </div>
+              <button type="button" onClick={() => void deleteCurrentTicket()} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300 dark:hover:bg-red-950">
+                <Trash2 size={16} /> Ticket löschen
               </button>
             </Card>
+          </aside>
+        ) : (
+          <aside className="xl:sticky xl:top-28 xl:h-fit">
+            <Card className="p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Aktueller Stand</p>
+              <div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={ticket.status} /><PriorityBadge priority={ticket.priority} /></div>
+              <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">Änderungen am Status erscheinen hier automatisch. Für Rückfragen kannst du direkt einen öffentlichen Kommentar schreiben.</p>
+            </Card>
+          </aside>
         )}
       </div>
+    </div>
+  );
+}
+
+function Comment({ comment }: { comment: TicketComment }) {
+  return (
+    <div className={`rounded-3xl border p-4 sm:p-5 ${comment.visibility === 'internal' ? 'border-orange-200 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">{(comment.profiles?.display_name ?? '?').slice(0, 1).toUpperCase()}</div><div><p className="text-sm font-bold text-slate-900 dark:text-white">{comment.profiles?.display_name ?? 'Unbekannt'} {comment.visibility === 'internal' && <span className="ml-1 rounded-full bg-orange-100 px-2 py-0.5 text-[9px] font-black uppercase text-orange-700 dark:bg-orange-950 dark:text-orange-300">Intern</span>}</p><p className="text-[11px] text-slate-400">{formatDateTime(comment.created_at)} · {relativeTime(comment.created_at)}</p></div></div>
+      </div>
+      {comment.body.trim() && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">{comment.body}</p>}
+      {comment.attachments && comment.attachments.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{comment.attachments.map((attachment) => <CommentAttachmentPreview key={attachment.id} attachment={attachment} />)}</div>}
+    </div>
   );
 }
 
 function CommentAttachmentPreview({ attachment }: { attachment: TicketAttachment }) {
-  if (!attachment.signed_url) {
-    return (
-        <div className="rounded-xl border border-ha-border bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900">
-          <p className="truncate font-medium text-slate-800 dark:text-slate-100">{attachment.file_name}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Vorschau nicht verfügbar</p>
-        </div>
-    );
-  }
-
+  if (!attachment.signed_url) return <div className="rounded-2xl bg-slate-100 p-3 text-xs text-slate-500 dark:bg-slate-800"><p className="truncate font-bold">{attachment.file_name}</p><p>Vorschau nicht verfügbar</p></div>;
   return (
-      <a
-          href={attachment.signed_url}
-          target="_blank"
-          rel="noreferrer"
-          className="block rounded-xl border border-ha-border bg-white p-2 transition hover:border-sky-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-700"
-      >
-        <img
-            src={attachment.signed_url}
-            alt={attachment.file_name}
-            className="h-36 w-full rounded-lg object-cover"
-            loading="lazy"
-        />
-
-        <div className="mt-2">
-          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{attachment.file_name}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{formatFileSize(attachment.file_size)}</p>
-        </div>
-      </a>
+    <a href={attachment.signed_url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 transition hover:border-sky-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-sky-700">
+      <img src={attachment.signed_url} alt={attachment.file_name} className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.02]" loading="lazy" decoding="async" />
+      <div className="p-2.5"><p className="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{attachment.file_name}</p><p className="text-[10px] text-slate-400">{formatFileSize(attachment.file_size)}</p></div>
+    </a>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function EventRow({ event, last }: { event: TicketEvent; last: boolean }) {
+  const description = describeEvent(event);
   return (
-      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-        <p className="font-medium text-slate-900 dark:text-slate-100">{value}</p>
-      </div>
+    <div className="relative flex gap-3 pb-4">
+      {!last && <span className="absolute bottom-0 left-[15px] top-8 w-px bg-slate-200 dark:bg-slate-800" />}
+      <div className="relative z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"><History size={14} /></div>
+      <div className="min-w-0 pt-1"><p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{description}</p><p className="mt-0.5 text-[11px] text-slate-400">{formatDateTime(event.created_at)}</p></div>
+    </div>
   );
+}
+
+function describeEvent(event: TicketEvent) {
+  if (event.event_type === 'ticket_created') return 'Ticket wurde erstellt.';
+  if (event.event_type === 'status_changed') return `Status: ${statusLabel(event.old_value)} → ${statusLabel(event.new_value)}`;
+  if (event.event_type === 'priority_changed') return `Priorität: ${priorityLabel(event.old_value)} → ${priorityLabel(event.new_value)}`;
+  if (event.event_type === 'category_changed') return `Kategorie: ${event.old_value ?? '—'} → ${event.new_value ?? '—'}`;
+  return event.event_type.replace(/_/g, ' ');
+}
+
+function statusLabel(value?: string | null) {
+  return value && value in statusLabels ? statusLabels[value as keyof typeof statusLabels] : value ?? '—';
+}
+
+function priorityLabel(value?: string | null) {
+  return value && value in priorityLabels ? priorityLabels[value as keyof typeof priorityLabels] : value ?? '—';
+}
+
+function Info({ icon: Icon, label, value, mono = false }: { icon: typeof Tag; label: string; value: string; mono?: boolean }) {
+  return <div className="bg-white p-4 dark:bg-slate-900"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon size={13} /> {label}</div><p className={`mt-1.5 truncate text-sm font-bold text-slate-800 dark:text-slate-100 ${mono ? 'font-mono text-xs' : ''}`} title={value}>{value}</p></div>;
+}
+
+function AdminSelect({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: React.ReactNode }) {
+  return <label className="block"><span className="field-label">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="field-input mt-1">{children}</select></label>;
+}
+
+function SideInfo({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-start justify-between gap-3"><span>{label}</span><span className="text-right font-bold text-slate-700 dark:text-slate-200">{value}</span></div>;
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value.includes('T') ? value : `${value}T12:00:00`));
 }
 
 function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`;
-  }
-
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

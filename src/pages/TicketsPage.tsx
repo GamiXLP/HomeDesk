@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
-import { getTickets } from '../lib/tickets';
-import type { Ticket } from '../types/database';
 import { TicketList } from '../components/tickets/TicketList';
-export function TicketsPage() { const [tickets, setTickets] = useState<Ticket[]>([]); useEffect(()=>{ getTickets().then(setTickets); }, []); return <TicketList tickets={tickets}/>; }
+import { ErrorState, LoadingState } from '../components/ui/States';
+import { useTickets } from '../hooks/useTickets';
+
+export function TicketsPage() {
+  const { tickets, loading, error, refresh } = useTickets();
+  if (loading && tickets.length === 0) return <LoadingState rows={5} />;
+  if (error && tickets.length === 0) return <ErrorState message={error} onRetry={() => void refresh(true)} />;
+  return <TicketList tickets={tickets} />;
+}
