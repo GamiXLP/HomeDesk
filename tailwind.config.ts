@@ -7,17 +7,17 @@ export default {
     extend: {
       colors: {
         ha: {
-          blue: '#03a9f4',
-          dark: '#111827',
-          bg: '#f6f8fb',
-          border: '#e5e7eb',
+          blue: '#0ea5e9',
+          dark: '#0f172a',
+          bg: '#f7f9fc',
+          border: '#e2e8f0',
         },
       },
       borderRadius: {
-        card: '16px',
+        card: '24px',
       },
       boxShadow: {
-        card: '0 8px 24px rgba(15, 23, 42, 0.05)',
+        card: '0 12px 34px rgba(15, 23, 42, 0.055)',
       },
     },
   },
