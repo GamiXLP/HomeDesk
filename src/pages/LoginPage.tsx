@@ -30,21 +30,21 @@ export function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-4 sm:p-8">
-      <div className="absolute left-[-12%] top-[-28%] h-[48rem] w-[48rem] rounded-full bg-sky-500/20 blur-3xl" />
-      <div className="absolute bottom-[-35%] right-[-10%] h-[52rem] w-[52rem] rounded-full bg-cyan-400/15 blur-3xl" />
-      <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.8)_1px,transparent_1px)] [background-size:44px_44px]" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 p-4 transition-colors dark:bg-slate-950 sm:p-8">
+      <div className="absolute left-[-12%] top-[-28%] h-[48rem] w-[48rem] rounded-full bg-sky-400/25 blur-3xl dark:bg-sky-500/20" />
+      <div className="absolute bottom-[-35%] right-[-10%] h-[52rem] w-[52rem] rounded-full bg-cyan-300/25 blur-3xl dark:bg-cyan-400/15" />
+      <div className="absolute inset-0 opacity-[0.055] [background-image:linear-gradient(rgba(15,23,42,.18)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,.18)_1px,transparent_1px)] [background-size:44px_44px] dark:opacity-[0.035] dark:[background-image:linear-gradient(rgba(255,255,255,.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.8)_1px,transparent_1px)]" />
 
-      <div className="relative grid w-full max-w-[1180px] overflow-hidden rounded-[40px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30 backdrop-blur-xl lg:min-h-[650px] lg:grid-cols-[1.08fr_.92fr]">
-        <section className="hidden flex-col justify-between p-12 text-white lg:flex xl:p-14">
+      <div className="relative grid w-full max-w-[1180px] overflow-hidden rounded-[40px] border border-slate-200 bg-white/70 shadow-2xl shadow-slate-300/40 backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-white/[0.055] dark:shadow-black/30 lg:min-h-[650px] lg:grid-cols-[1.08fr_.92fr]">
+        <section className="hidden flex-col justify-between p-12 text-slate-950 lg:flex dark:text-white xl:p-14">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3.5 py-2 text-xs font-bold text-sky-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3.5 py-2 text-xs font-bold text-sky-700 dark:border-white/10 dark:bg-white/10 dark:text-sky-200">
               <Sparkles size={14} /> HomeDesk 2.1
             </div>
             <h1 className="mt-8 max-w-xl text-5xl font-black leading-[1.02] tracking-[-0.045em] xl:text-6xl">
               Der Helpdesk für dein vernetztes Zuhause.
             </h1>
-            <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 xl:text-lg xl:leading-8">
+            <p className="mt-6 max-w-lg text-base leading-7 text-slate-600 dark:text-slate-300 xl:text-lg xl:leading-8">
               Probleme, Ideen, Automationen und Geräte zentral erfassen, priorisieren und nachvollziehbar lösen.
             </p>
 
@@ -55,7 +55,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
+          <div className="flex items-center gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
             <LockKeyhole size={15} /> Geschützter Bereich · Supabase Authentication
           </div>
         </section>
@@ -101,10 +101,10 @@ export function LoginPage() {
 
 function Feature({ icon: Icon, label, text }: { icon: typeof Gauge; label: string; text: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3.5">
-      <Icon size={17} className="text-sky-300" />
-      <p className="mt-3 text-sm font-black text-white">{label}</p>
-      <p className="mt-0.5 text-[11px] text-slate-400">{text}</p>
+    <div className="rounded-2xl border border-slate-200 bg-white/70 p-3.5 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:shadow-none">
+      <Icon size={17} className="text-sky-600 dark:text-sky-300" />
+      <p className="mt-3 text-sm font-black text-slate-950 dark:text-white">{label}</p>
+      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{text}</p>
     </div>
   );
 }

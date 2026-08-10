@@ -45,25 +45,25 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-7 2xl:space-y-8">
-      <section className="relative overflow-hidden rounded-[34px] bg-slate-950 px-6 py-7 text-white shadow-2xl shadow-slate-900/10 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
-        <div className="absolute -right-20 -top-28 h-80 w-80 rounded-full bg-sky-500/30 blur-3xl" />
-        <div className="absolute -bottom-32 right-1/3 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[34px] border border-slate-200/80 bg-white px-6 py-7 text-slate-950 shadow-xl shadow-slate-200/50 transition-colors dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:shadow-slate-950/30 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
+        <div className="absolute -right-20 -top-28 h-80 w-80 rounded-full bg-sky-400/15 blur-3xl dark:bg-sky-500/30" />
+        <div className="absolute -bottom-32 right-1/3 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl dark:bg-cyan-400/20" />
         <div className="relative grid gap-7 xl:grid-cols-[minmax(0,1fr)_430px] xl:items-end">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-300"><Sparkles size={14} />Smart Home Command Center</div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300"><Sparkles size={14} />Smart Home Command Center</div>
             <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl xl:text-[42px]">Hallo {friendlyDisplayName(profile?.display_name)} 👋</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300 sm:text-base">
               {stats.open === 0
                 ? 'Im Moment ist alles erledigt. Das Smart Home hat heute nichts zu meckern.'
                 : `${stats.open} ${stats.open === 1 ? 'Thema ist' : 'Themen sind'} noch offen. ${stats.high > 0 ? `${stats.high} davon ${stats.high === 1 ? 'hat' : 'haben'} hohe Priorität.` : 'Nichts davon ist aktuell kritisch.'}`}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              <Link to="/app/tickets?scope=open"><Button variant="secondary" className="border-white/10 bg-white/10 text-white hover:bg-white/15 dark:bg-white/10">Offene Tickets <ArrowRight size={16} /></Button></Link>
+              <Link to="/app/tickets?scope=open"><Button variant="secondary" className="border-slate-200 bg-slate-100 text-slate-900 hover:bg-slate-200 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15">Offene Tickets <ArrowRight size={16} /></Button></Link>
               <Link to="/app/tickets/new"><Button><Plus size={17} />Neues Ticket</Button></Link>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-3xl border border-white/10 bg-white/[0.07] p-3 backdrop-blur">
+          <div className="grid grid-cols-3 gap-2 rounded-3xl border border-slate-200 bg-slate-50/80 p-3 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.07] dark:shadow-none">
             <HeroMetric label="Ungelesen" value={unreadCount} />
             <HeroMetric label="Abschluss" value={`${stats.completion}%`} />
             <HeroMetric label="Kritisch" value={stats.high} />
@@ -123,5 +123,5 @@ export function DashboardPage() {
 }
 
 function HeroMetric({ label, value }: { label: string; value: number | string }) {
-  return <div className="rounded-2xl bg-white/[0.06] px-3 py-3 text-center"><p className="text-xl font-black tracking-tight text-white">{value}</p><p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p></div>;
+  return <div className="rounded-2xl bg-white px-3 py-3 text-center shadow-sm dark:bg-white/[0.06] dark:shadow-none"><p className="text-xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p><p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p></div>;
 }
