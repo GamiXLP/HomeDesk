@@ -6,6 +6,10 @@
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 
 .dark {
@@ -13,15 +17,33 @@
 }
 
 html {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100dvh;
 }
 
 body {
-  @apply m-0 min-w-[320px] bg-ha-bg text-slate-900 antialiased transition-colors duration-200;
+  @apply m-0 min-w-0 bg-ha-bg text-slate-900 antialiased transition-colors duration-200;
   background-image:
     radial-gradient(circle at 10% -10%, rgba(14, 165, 233, 0.08), transparent 28rem),
     radial-gradient(circle at 95% 10%, rgba(34, 211, 238, 0.06), transparent 24rem);
   background-attachment: fixed;
+  overscroll-behavior-y: auto;
 }
 
 .dark body {
@@ -55,7 +77,16 @@ select {
 input,
 select,
 textarea {
-  @apply bg-white text-slate-900 transition-colors duration-200;
+  @apply max-w-full bg-white text-slate-900 transition-colors duration-200;
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: inherit;
+  }
 }
 
 .dark input,
@@ -68,9 +99,17 @@ textarea {
   @apply bg-slate-900 text-slate-100;
 }
 
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgb(203 213 225) transparent;
+  box-sizing: border-box;
 }
 
 .dark * {
@@ -83,11 +122,139 @@ textarea {
   }
 
   .field-input {
-    @apply min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100/70 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700 dark:focus:ring-sky-950/70;
+    @apply min-h-11 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100/70 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700 dark:focus:ring-sky-950/70;
   }
 
   .filter-select {
-    @apply h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 outline-none transition hover:border-slate-300 focus:border-sky-400 focus:ring-4 focus:ring-sky-100/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:focus:ring-sky-950;
+    @apply h-11 min-w-0 rounded-2xl border border-slate-200 bg-white px-3 font-semibold text-slate-600 outline-none transition hover:border-slate-300 focus:border-sky-400 focus:ring-4 focus:ring-sky-100/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:focus:ring-sky-950;
+  }
+
+  .topbar-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition active:scale-95 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white;
+  }
+
+  .section-kicker {
+    @apply text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400 sm:text-[11px] sm:tracking-[0.14em];
+  }
+
+  .section-title {
+    @apply mt-1 text-lg font-black tracking-tight text-slate-950 dark:text-white sm:text-xl;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.app-shell,
+.app-main,
+.app-content,
+.app-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.app-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.app-main {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.app-topbar {
+  min-height: calc(3.5rem + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: max(0.75rem, var(--safe-left));
+  padding-right: max(0.75rem, var(--safe-right));
+}
+
+.mobile-bottom-nav {
+  padding-left: max(0.5rem, var(--safe-left));
+  padding-right: max(0.5rem, var(--safe-right));
+  padding-bottom: max(0.5rem, var(--safe-bottom));
+}
+
+.mobile-sheet {
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+  padding-bottom: max(1.25rem, var(--safe-bottom));
+}
+
+.ticket-toolbar {
+  top: calc(3.65rem + var(--safe-top));
+}
+
+.search-overlay {
+  padding-top: max(8vh, calc(var(--safe-top) + 1rem));
+}
+
+.render-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 150px;
+}
+
+@media (max-width: 639px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  .app-content {
+    padding-left: max(0.75rem, var(--safe-left));
+    padding-right: max(0.75rem, var(--safe-right));
+    padding-bottom: calc(6.3rem + var(--safe-bottom));
+  }
+
+  .notification-panel {
+    position: fixed !important;
+    left: max(0.75rem, var(--safe-left));
+    right: max(0.75rem, var(--safe-right));
+    top: calc(3.9rem + var(--safe-top)) !important;
+    width: auto !important;
+    max-height: calc(100dvh - 5rem - var(--safe-top) - var(--safe-bottom));
+  }
+
+  .notification-panel > div:nth-child(4) {
+    max-height: min(55dvh, 440px);
+  }
+
+  .render-lazy {
+    contain-intrinsic-size: 0 120px;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-content {
+    padding-bottom: calc(6.5rem + var(--safe-bottom));
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-topbar {
+    min-height: 5rem;
+    padding-top: 0;
+  }
+
+  .ticket-toolbar {
+    top: 5.5rem;
   }
 }
 
@@ -100,23 +267,4 @@ textarea {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
-}
-
-@layer components {
-  .topbar-icon {
-    @apply flex h-10 w-10 items-center justify-center rounded-2xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white;
-  }
-
-  .section-kicker {
-    @apply text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400;
-  }
-
-  .section-title {
-    @apply mt-1 text-xl font-black tracking-tight text-slate-950 dark:text-white;
-  }
-}
-
-.render-lazy {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 150px;
 }

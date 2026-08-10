@@ -50,11 +50,11 @@ export function StatisticsPage() {
   const volumeDelta = previousCount === null || previousCount === 0 ? null : Math.round(((filteredTickets.length - previousCount) / previousCount) * 100);
 
   return (
-    <div className="space-y-7 2xl:space-y-8">
+    <div className="min-w-0 space-y-5 sm:space-y-7 2xl:space-y-8">
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-500">Insights</p>
-          <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Wie läuft HomeDesk?</h2>
+          <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Wie läuft HomeDesk?</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Volumen, Geschwindigkeit und Schwerpunkte – interaktiv filterbar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -66,7 +66,7 @@ export function StatisticsPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <Metric label="Tickets im Zeitraum" value={filteredTickets.length} icon={BarChart3} hint={volumeDelta === null ? undefined : `${volumeDelta >= 0 ? '+' : ''}${volumeDelta}% vs. davor`} />
         <Metric label="Offen" value={metrics.open} icon={Clock3} />
         <Metric label="Erledigt" value={metrics.done} icon={CheckCircle2} />
@@ -148,7 +148,7 @@ function buildMetrics(tickets: Ticket[]) {
 }
 
 function Metric({ label, value, icon: Icon, hint }: { label: string; value: number | string; icon: typeof BarChart3; hint?: string }) {
-  return <Card className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p>{hint && <p className="mt-1 text-[10px] font-bold text-sky-600 dark:text-sky-300">{hint}</p>}</div><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300"><Icon size={17} /></div></div></Card>;
+  return <Card className="p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p>{hint && <p className="mt-1 text-[10px] font-bold text-sky-600 dark:text-sky-300">{hint}</p>}</div><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300"><Icon size={17} /></div></div></Card>;
 }
 
 function DistributionCard({ title, data, total, linkKey }: { title: string; data: Record<string, number>; total: number; linkKey: 'area' | 'category' }) {

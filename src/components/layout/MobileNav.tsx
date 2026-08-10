@@ -24,22 +24,40 @@ export function MobileNav() {
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/90 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/90 lg:hidden">
+      <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/[0.92] px-2 pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur-2xl dark:border-slate-800 dark:bg-slate-950/[0.92] lg:hidden" aria-label="Hauptnavigation">
         <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
           {nav.map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => cn('relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold transition', 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800', isActive && !item.primary && 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300', item.primary && 'text-sky-600 dark:text-sky-300')}>
-              {item.primary ? <span className="-mt-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/25"><item.icon size={22} /></span> : <item.icon size={20} />}
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => cn(
+                'relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold transition active:scale-[0.97]',
+                'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',
+                isActive && !item.primary && 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300',
+                item.primary && 'text-sky-600 dark:text-sky-300',
+              )}
+            >
+              {item.primary ? (
+                <span className="-mt-5 flex h-12 w-12 items-center justify-center rounded-[18px] bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/25 ring-4 ring-white dark:ring-slate-950">
+                  <item.icon size={23} />
+                </span>
+              ) : (
+                <item.icon size={20} />
+              )}
               <span className={item.primary ? '-mt-0.5' : ''}>{item.label}</span>
             </NavLink>
           ))}
-          <button type="button" onClick={() => setMoreOpen(true)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"><Menu size={20} /><span>Mehr</span></button>
+          <button type="button" onClick={() => setMoreOpen(true)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold text-slate-500 transition active:scale-[0.97] hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+            <Menu size={20} /><span>Mehr</span>
+          </button>
         </div>
       </nav>
 
       {moreOpen && (
-        <div className="fixed inset-0 z-[120] bg-slate-950/35 backdrop-blur-sm lg:hidden" onMouseDown={(event) => { if (event.currentTarget === event.target) setMoreOpen(false); }}>
-          <div className="absolute inset-x-0 bottom-0 rounded-t-[30px] border-t border-slate-200 bg-white p-4 pb-[max(22px,env(safe-area-inset-bottom))] shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <div className="fixed inset-0 z-[120] bg-slate-950/45 backdrop-blur-sm lg:hidden" onMouseDown={(event) => { if (event.currentTarget === event.target) setMoreOpen(false); }}>
+          <div className="mobile-sheet absolute inset-x-0 bottom-0 rounded-t-[30px] border-t border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="mx-auto max-w-lg">
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-700" />
               <div className="flex items-center justify-between gap-3 px-1 pb-3">
                 <div><p className="text-sm font-black text-slate-950 dark:text-white">{profile?.display_name}</p><p className="text-xs text-slate-500">{isAdmin ? 'Administrator' : 'Benutzer'}</p></div>
                 <button type="button" onClick={() => setMoreOpen(false)} className="rounded-2xl p-2.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={19} /></button>

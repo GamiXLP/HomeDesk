@@ -92,10 +92,10 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/80 sm:gap-3 sm:px-6 lg:h-20 lg:px-8 2xl:px-10">
+      <header className="app-topbar sticky top-0 z-40 flex min-w-0 items-center gap-1.5 border-b border-slate-200/70 bg-white/[0.88] px-3 backdrop-blur-2xl dark:border-slate-800 dark:bg-slate-950/[0.88] sm:gap-3 sm:px-6 lg:px-8 2xl:px-10">
         <div className="min-w-0 flex-1">
           <p className="hidden text-[11px] font-bold uppercase tracking-[0.18em] text-sky-500 sm:block">HomeDesk</p>
-          <h1 className="truncate text-lg font-black tracking-tight text-slate-950 dark:text-white lg:text-xl">{title}</h1>
+          <h1 className="truncate text-base font-black tracking-tight text-slate-950 dark:text-white sm:text-lg lg:text-xl">{title}</h1>
         </div>
 
         <button
@@ -140,7 +140,7 @@ export function Topbar() {
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 top-12 w-[min(94vw,430px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+            <div className="notification-panel absolute right-0 top-12 w-[min(94vw,430px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center justify-between px-4 pb-2 pt-4">
                 <div>
                   <p className="text-sm font-black text-slate-900 dark:text-white">Benachrichtigungen</p>
@@ -196,7 +196,7 @@ export function Topbar() {
       </header>
 
       {searchOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/40 px-3 pt-[8vh] backdrop-blur-sm sm:px-4 sm:pt-[10vh]" onMouseDown={(event) => { if (event.currentTarget === event.target) setSearchOpen(false); }}>
+        <div className="search-overlay fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/40 px-3 pt-[8vh] backdrop-blur-sm sm:px-4 sm:pt-[10vh]" onMouseDown={(event) => { if (event.currentTarget === event.target) setSearchOpen(false); }}>
           <div className="w-full max-w-3xl overflow-hidden rounded-[30px] border border-white/50 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 sm:px-5 dark:border-slate-800">
               <Search size={20} className="shrink-0 text-sky-500" />

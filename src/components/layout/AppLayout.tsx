@@ -7,11 +7,11 @@ import { Topbar } from './Topbar';
 export function AppLayout() {
   return (
     <TicketDataProvider>
-      <div className="min-h-screen bg-ha-bg text-slate-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100 lg:flex">
+      <div className="app-shell min-h-[100dvh] bg-ha-bg text-slate-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100 lg:flex">
         <Sidebar />
-        <main className="min-w-0 flex-1">
+        <main className="app-main min-w-0 flex-1">
           <Topbar />
-          <div className="mx-auto w-full max-w-[1760px] p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-10 2xl:px-10">
+          <div className="app-content mx-auto w-full max-w-[1760px] p-3 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-10 2xl:px-10">
             <Outlet />
           </div>
           <MobileNav />
