@@ -95,40 +95,40 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
   const lastShown = Math.min(page * pageSize, filtered.length);
 
   return (
-    <div className="space-y-5">
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="min-w-0 space-y-4 sm:space-y-5">
+      <section className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-500">Ticket Center</p>
-          <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Alle Anliegen im Blick</h2>
+          <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Alle Anliegen im Blick</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {filtered.length === 0 ? 'Keine passenden Tickets.' : `${firstShown}–${lastShown} von ${filtered.length} Treffern`} · {tickets.length} insgesamt
           </p>
         </div>
-        <Link to="/app/tickets/new"><Button><Plus size={17} />Neues Ticket</Button></Link>
+        <Link to="/app/tickets/new" className="hidden sm:block"><Button><Plus size={17} />Neues Ticket</Button></Link>
       </section>
 
-      <section className="sticky top-[72px] z-30 rounded-3xl border border-white/70 bg-white/90 p-3 shadow-card backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 lg:top-[88px]">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <div className="relative min-w-0 flex-1">
+      <section className="ticket-toolbar sticky z-30 min-w-0 rounded-[24px] border border-white/70 bg-white/[0.92] p-2.5 shadow-card backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/[0.92] sm:rounded-3xl sm:p-3">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 md:flex md:items-center">
+          <div className="relative col-span-2 min-w-0 flex-1 md:col-span-1">
             <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={query} onChange={(event) => setParam('q', event.target.value, '')} placeholder="Ticketnummer, Titel, Beschreibung, Gerät, Raum …" className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-10 pr-10 text-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100/60 dark:border-slate-700 dark:bg-slate-950/50 dark:focus:ring-sky-950" />
             {query && <button onClick={() => setParam('q', '', '')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800"><X size={14} /></button>}
           </div>
 
-          <select value={scope} onChange={(event) => setParam('scope', event.target.value, preferences.defaultTicketScope)} className="filter-select">
+          <select value={scope} onChange={(event) => setParam('scope', event.target.value, preferences.defaultTicketScope)} className="filter-select min-w-0 w-full md:w-auto">
             <option value="all">Alle Tickets</option><option value="open">Nur offen</option><option value="closed">Nur abgeschlossen</option>
           </select>
 
-          <select value={sort} onChange={(event) => setParam('sort', event.target.value, 'updated_desc')} className="filter-select">
+          <select value={sort} onChange={(event) => setParam('sort', event.target.value, 'updated_desc')} className="filter-select col-span-2 min-w-0 w-full md:col-span-1 md:w-auto">
             <option value="updated_desc">Zuletzt geändert</option><option value="priority">Priorität zuerst</option><option value="created_desc">Neueste zuerst</option><option value="updated_asc">Älteste Aktivität</option>
           </select>
 
-          <Button variant="secondary" onClick={() => setFiltersOpen((current) => !current)}>
+          <Button variant="secondary" className="w-full md:w-auto" onClick={() => setFiltersOpen((current) => !current)}>
             <SlidersHorizontal size={16} />Filter
             {activeFilterCount > 0 && <span className="rounded-full bg-sky-500 px-1.5 py-0.5 text-[10px] font-black text-white">{activeFilterCount}</span>}
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={toggleCompact} title="Darstellung wechseln"><LayoutList size={18} /></Button>
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={toggleCompact} title="Darstellung wechseln"><LayoutList size={18} /></Button>
         </div>
 
         {filtersOpen && (
@@ -153,7 +153,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
       </section>
 
       {activeFilterCount > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="no-scrollbar flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           <span className="flex items-center gap-1.5 text-xs font-bold text-slate-400"><Filter size={13} />Aktiv:</span>
           {scope !== preferences.defaultTicketScope && <FilterChip label={scope === 'open' ? 'Offen' : scope === 'closed' ? 'Abgeschlossen' : 'Alle'} onRemove={() => setParam('scope', preferences.defaultTicketScope, preferences.defaultTicketScope)} />}
           {status !== 'all' && <FilterChip label={statusLabels[status as keyof typeof statusLabels]} onRemove={() => setParam('status', 'all')} />}
@@ -166,7 +166,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
         </div>
       )}
 
-      <div className={preferences.ticketDensity === 'compact' ? 'space-y-2' : 'space-y-3'}>
+      <div className={preferences.ticketDensity === 'compact' ? 'min-w-0 space-y-2' : 'min-w-0 space-y-2.5 sm:space-y-3'}>
         {filtered.length === 0 ? (
           <EmptyState title="Keine passenden Tickets" text="Passe Suche oder Filter an – oder erstelle direkt ein neues Ticket." action={<Button variant="secondary" onClick={resetFilters}><RotateCcw size={16} />Filter zurücksetzen</Button>} />
         ) : (
@@ -179,7 +179,8 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
           <p className="px-2 text-xs font-semibold text-slate-500">Seite <strong className="text-slate-800 dark:text-slate-200">{page}</strong> von {pageCount}</p>
           <div className="flex items-center gap-1">
             <PageButton disabled={page <= 1} onClick={() => setParam('page', String(page - 1), '1')} ariaLabel="Vorherige Seite"><ChevronLeft size={16} /></PageButton>
-            {pageNumbers(page, pageCount).map((item, index) => item === '…' ? <span key={`ellipsis-${index}`} className="px-1 text-slate-400">…</span> : <button key={item} onClick={() => setParam('page', String(item), '1')} className={`h-9 min-w-9 rounded-xl px-2 text-xs font-bold transition ${item === page ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>{item}</button>)}
+            <span className="min-w-16 text-center text-xs font-black text-slate-700 dark:text-slate-200 sm:hidden">{page} / {pageCount}</span>
+            <span className="hidden items-center gap-1 sm:flex">{pageNumbers(page, pageCount).map((item, index) => item === '…' ? <span key={`ellipsis-${index}`} className="px-1 text-slate-400">…</span> : <button key={item} onClick={() => setParam('page', String(item), '1')} className={`h-9 min-w-9 rounded-xl px-2 text-xs font-bold transition ${item === page ? 'bg-sky-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>{item}</button>)}</span>
             <PageButton disabled={page >= pageCount} onClick={() => setParam('page', String(page + 1), '1')} ariaLabel="Nächste Seite"><ChevronRight size={16} /></PageButton>
           </div>
         </nav>

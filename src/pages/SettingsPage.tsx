@@ -32,15 +32,15 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-7">
+    <div className="min-w-0 space-y-5 sm:space-y-7">
       <section>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-500">Persönlich</p>
-        <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Einstellungen</h2>
+        <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Einstellungen</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Passe HomeDesk an deinen Arbeitsstil und dein Gerät an.</p>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
-        <Card className="p-6 2xl:row-span-2">
+        <Card className="p-4 sm:p-6 2xl:row-span-2">
           <SectionHeader icon={UserRound} title="Profil" text="So wirst du in HomeDesk angezeigt." tone="sky" />
           <form onSubmit={saveProfile} className="mt-6 space-y-4">
             <div><label className="field-label">Anzeigename</label><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="field-input mt-1" /></div>
@@ -50,7 +50,7 @@ export function SettingsPage() {
           </form>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <SectionHeader icon={Palette} title="Darstellung" text="Das Theme gilt auf diesem Gerät." tone="violet" />
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <ThemeChoice active={theme === 'light'} label="Hell" description="Klare, helle Oberfläche" icon={Sun} onClick={() => setTheme('light')} />
@@ -58,7 +58,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <SectionHeader icon={LayoutList} title="Ticketdarstellung" text="Dichte und Anzahl pro Seite." tone="emerald" />
           <div className="mt-6 space-y-5">
             <SettingGroup label="Dichte">
@@ -70,7 +70,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <SectionHeader icon={SlidersHorizontal} title="Arbeitsweise" text="Standardansichten und Dashboard." tone="orange" />
           <div className="mt-6 space-y-5">
             <label className="block">
@@ -86,7 +86,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <SectionHeader icon={Laptop} title="Schnellzugriff" text="Shortcuts für den Alltag." tone="slate" />
           <div className="mt-6 space-y-3">
             <Shortcut keys="Strg + K" text="Globale Ticketsuche öffnen" />

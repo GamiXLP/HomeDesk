@@ -242,7 +242,7 @@ export function TicketDetailPage() {
   const assignedProfile = profiles.find((profile) => profile.id === ticket.assigned_to);
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link to="/app/tickets" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">
           <ArrowLeft size={16} /> Alle Tickets
@@ -263,7 +263,7 @@ export function TicketDetailPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main className="space-y-6">
           <Card className="overflow-hidden">
-            <div className="border-b border-slate-100 p-6 sm:p-8 dark:border-slate-800">
+            <div className="border-b border-slate-100 p-4 sm:p-8 dark:border-slate-800">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
@@ -273,14 +273,14 @@ export function TicketDetailPage() {
                     <span>•</span>
                     <span>{relativeTime(ticket.updated_at)} aktualisiert</span>
                   </div>
-                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">{ticket.title}</h2>
+                  <h2 className="mt-2 break-words text-xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">{ticket.title}</h2>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2"><StatusBadge status={ticket.status} /><PriorityBadge priority={ticket.priority} /></div>
               </div>
-              <p className="mt-6 whitespace-pre-wrap text-[15px] leading-7 text-slate-700 dark:text-slate-300">{ticket.description}</p>
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300 sm:mt-6 sm:text-[15px] sm:leading-7">{ticket.description}</p>
             </div>
 
-            <div className="grid gap-px bg-slate-100 sm:grid-cols-2 lg:grid-cols-3 dark:bg-slate-800">
+            <div className="grid grid-cols-2 gap-px bg-slate-100 lg:grid-cols-3 dark:bg-slate-800">
               <Info icon={Tag} label="Kategorie" value={ticket.category} />
               <Info icon={MapPin} label="Bereich" value={ticket.area} />
               <Info icon={Cpu} label="Gerät" value={ticket.device || 'Nicht angegeben'} />
@@ -290,7 +290,7 @@ export function TicketDetailPage() {
             </div>
           </Card>
 
-          <Card className="p-5 sm:p-6">
+          <Card className="p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300"><MessageSquare size={19} /></div>
@@ -303,8 +303,8 @@ export function TicketDetailPage() {
               {comments.map((comment) => <Comment key={comment.id} comment={comment} />)}
             </div>
 
-            <form onSubmit={submitComment} className="mt-6 rounded-3xl bg-slate-50 p-4 dark:bg-slate-950/50 sm:p-5">
-              <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Antwort schreiben …" className="min-h-28 w-full resize-y border-0 bg-transparent p-0 text-sm leading-6 outline-none focus:ring-0 dark:bg-transparent" />
+            <form onSubmit={submitComment} className="mt-5 rounded-[24px] bg-slate-50 p-3.5 dark:bg-slate-950/50 sm:mt-6 sm:rounded-3xl sm:p-5">
+              <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Antwort schreiben …" className="min-h-24 w-full resize-y border-0 bg-transparent p-0 text-sm leading-6 outline-none focus:ring-0 dark:bg-transparent sm:min-h-28" />
 
               {previewFiles.length > 0 && (
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
@@ -333,14 +333,14 @@ export function TicketDetailPage() {
                   )}
                   <span className="hidden text-[11px] text-slate-400 sm:inline">max. {COMMENT_IMAGE_MAX_COUNT} Bilder · je 5 MB</span>
                 </div>
-                <Button size="sm" disabled={isSubmittingComment}>
+                <Button size="sm" className="min-w-24" disabled={isSubmittingComment}>
                   <Send size={15} /> {isSubmittingComment ? 'Sendet …' : 'Senden'}
                 </Button>
               </div>
             </form>
           </Card>
 
-          <Card className="p-5 sm:p-6">
+          <Card className="p-4 sm:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-300"><History size={19} /></div>
               <div><h3 className="font-black text-slate-950 dark:text-white">Aktivitätsverlauf</h3><p className="text-xs text-slate-500">Automatisch aus Ticket-Events</p></div>
@@ -457,7 +457,7 @@ function priorityLabel(value?: string | null) {
 }
 
 function Info({ icon: Icon, label, value, mono = false }: { icon: typeof Tag; label: string; value: string; mono?: boolean }) {
-  return <div className="bg-white p-4 dark:bg-slate-900"><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Icon size={13} /> {label}</div><p className={`mt-1.5 truncate text-sm font-bold text-slate-800 dark:text-slate-100 ${mono ? 'font-mono text-xs' : ''}`} title={value}>{value}</p></div>;
+  return <div className="min-w-0 bg-white p-3 dark:bg-slate-900 sm:p-4"><div className="flex min-w-0 items-center gap-1.5 text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:gap-2 sm:text-[10px]"><Icon size={12} className="shrink-0" /> <span className="truncate">{label}</span></div><p className={`mt-1.5 truncate text-xs font-bold text-slate-800 dark:text-slate-100 sm:text-sm ${mono ? 'font-mono text-[10px] sm:text-xs' : ''}`} title={value}>{value}</p></div>;
 }
 
 function AdminSelect({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: React.ReactNode }) {

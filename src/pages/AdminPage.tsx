@@ -57,11 +57,11 @@ export function AdminPage() {
   }, [tickets]);
 
   return (
-    <div className="space-y-7 2xl:space-y-8">
+    <div className="min-w-0 space-y-5 sm:space-y-7 2xl:space-y-8">
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-sky-500"><ShieldCheck size={15} />Administration</div>
-          <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">HomeDesk Operations</h2>
+          <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">HomeDesk Operations</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Arbeitsvorrat, Nutzerlast und Tickets mit Handlungsbedarf auf einen Blick.</p>
         </div>
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
@@ -70,7 +70,7 @@ export function AdminPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <AdminMetric label="Offen" value={adminStats.open} icon={Inbox} href="/app/tickets?scope=open" />
         <AdminMetric label="Neu" value={adminStats.new} icon={AlertTriangle} href="/app/tickets?scope=open&status=new" />
         <AdminMetric label="Hoch/Dringend" value={adminStats.high} icon={Flame} href="/app/tickets?scope=open&sort=priority" />
