@@ -1,10 +1,11 @@
 import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 
 const HOME_ASSISTANT_SCHEME =
   'de.gamixlp.homedesk:';
 
-function handleNativeUrl(rawUrl: string) {
+async function handleNativeUrl(rawUrl: string) {
   try {
     const url = new URL(rawUrl);
 
@@ -18,8 +19,17 @@ function handleNativeUrl(rawUrl: string) {
     const callbackPath =
       `/auth/home-assistant/callback${url.search}`;
 
-    // Die WebView bleibt auf ihrem internen localhost.
-    // Wir navigieren nur React zur bestehenden Callback-Route.
+    // Der OAuth-Browser wird nach erfolgreicher Rückkehr
+    // geschlossen. Falls er bereits geschlossen ist, ist
+    // das unkritisch.
+    try {
+      await Browser.close();
+    } catch {
+      // Kein offenes Browser-Fenster.
+    }
+
+    // Die Capacitor-WebView bleibt intern auf localhost.
+    // Wir navigieren nur React zur Callback-Route.
     window.history.replaceState(
       {},
       '',
@@ -45,7 +55,7 @@ export async function initializeNativeDeepLinks() {
   await App.addListener(
     'appUrlOpen',
     (event) => {
-      handleNativeUrl(event.url);
+      void handleNativeUrl(event.url);
     },
   );
 
@@ -54,6 +64,6 @@ export async function initializeNativeDeepLinks() {
     await App.getLaunchUrl();
 
   if (launchUrl?.url) {
-    handleNativeUrl(launchUrl.url);
+    await handleNativeUrl(launchUrl.url);
   }
 }

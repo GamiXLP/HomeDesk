@@ -105,10 +105,11 @@ export function LoginPage() {
               variant="secondary"
               size="lg"
               className="w-full"
-              onClick={() => {
+              onClick={async () => {
                 try {
                   setError('');
-                  startHomeAssistantAuthorization();
+
+                  await startHomeAssistantAuthorization();
                 } catch (nextError) {
                   setError(
                     nextError instanceof Error

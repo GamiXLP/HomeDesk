@@ -190,11 +190,19 @@ export function HomeAssistantSettingsCard() {
               <Button
                 type="button"
                 className="mt-4 w-full sm:w-auto"
-                onClick={() =>
-                  startHomeAssistantAuthorization(
+                onClick={() => {
+                  void startHomeAssistantAuthorization(
                     'link',
-                  )
-                }
+                  ).catch((error) => {
+                    setState({
+                      status: 'error',
+                      error:
+                        error instanceof Error
+                          ? error.message
+                          : 'Home Assistant konnte nicht geöffnet werden.',
+                    });
+                  });
+                }}
               >
                 <Home size={16} />
                 Konto verknüpfen
@@ -257,11 +265,19 @@ export function HomeAssistantSettingsCard() {
               <Button
                 type="button"
                 className="sm:flex-1"
-                onClick={() =>
-                  startHomeAssistantAuthorization(
+                onClick={() => {
+                  void startHomeAssistantAuthorization(
                     'link',
-                  )
-                }
+                  ).catch((error) => {
+                    setState({
+                      status: 'error',
+                      error:
+                        error instanceof Error
+                          ? error.message
+                          : 'Home Assistant konnte nicht geöffnet werden.',
+                    });
+                  });
+                }}
               >
                 <RefreshCw size={16} />
                 Konto wechseln

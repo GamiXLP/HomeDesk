@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { supabase } from './supabase';
 
 const HOME_ASSISTANT_URL = import.meta.env.VITE_HOME_ASSISTANT_URL?.replace(/\/+$/, '');
@@ -98,10 +99,21 @@ export function buildHomeAssistantAuthorizeUrl(
   return authorizeUrl.toString();
 }
 
-export function startHomeAssistantAuthorization(
+export async function startHomeAssistantAuthorization(
   mode: HomeAssistantAuthMode = 'login',
 ) {
-  window.location.assign(buildHomeAssistantAuthorizeUrl(mode));
+  const authorizeUrl =
+    buildHomeAssistantAuthorizeUrl(mode);
+
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({
+      url: authorizeUrl,
+    });
+
+    return;
+  }
+
+  window.location.assign(authorizeUrl);
 }
 
 export function consumeHomeAssistantCallback(
