@@ -14,6 +14,8 @@ import {
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { supabase } from '../lib/supabase';
+
 import {
   clearHomeAssistantOAuthState,
   consumeHomeAssistantCallback,
@@ -82,6 +84,45 @@ export function HomeAssistantCallbackPage() {
             authMode,
           );
 
+        // ====================================================
+        // Normaler HA-Login:
+        // den einmaligen Supabase-Token gegen eine echte
+        // HomeDesk-Session tauschen.
+        // ====================================================
+
+        if (authMode === 'login') {
+          const tokenHash =
+            result.homeDeskLogin?.tokenHash;
+
+          if (!tokenHash) {
+            throw new Error(
+              'Home Assistant wurde bestätigt, aber HomeDesk konnte keine Anmeldesitzung erzeugen.',
+            );
+          }
+
+          const {
+            error: verifyError,
+          } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'email',
+          });
+
+          if (verifyError) {
+            throw new Error(
+              `HomeDesk-Anmeldung fehlgeschlagen: ${verifyError.message}`,
+            );
+          }
+
+          clearHomeAssistantOAuthState();
+
+          // Reload ist hier absichtlich robuster als navigate():
+          // AuthProvider startet anschließend bereits mit der
+          // gespeicherten Supabase-Session.
+          window.location.replace('/app');
+          return;
+        }
+
+        // Beim Verknüpfen weiterhin Erfolgsseite anzeigen.
         setExchangeState({
           status: 'success',
           data: result,

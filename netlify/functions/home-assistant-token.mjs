@@ -344,6 +344,133 @@ async function linkHomeAssistantIdentity(
   };
 }
 
+
+async function createHomeDeskLogin(
+  currentUser,
+) {
+  const supabase = createSupabaseAdmin();
+
+  // ----------------------------------------------------------
+  // 1. HA-Benutzer -> bestehendes HomeDesk-Konto
+  // ----------------------------------------------------------
+
+  const {
+    data: identity,
+    error: identityError,
+  } = await supabase
+    .from('home_assistant_identities')
+    .select(
+      'home_assistant_user_id, supabase_user_id',
+    )
+    .eq(
+      'home_assistant_user_id',
+      currentUser.id,
+    )
+    .maybeSingle();
+
+  if (identityError) {
+    throw identityError;
+  }
+
+  if (!identity) {
+    return {
+      ok: false,
+      status: 403,
+      error:
+        'Dieses Home-Assistant-Konto ist noch mit keinem HomeDesk-Konto verknüpft. Melde dich einmal mit E-Mail und Passwort an und verknüpfe Home Assistant in den Einstellungen.',
+    };
+  }
+
+  // ----------------------------------------------------------
+  // 2. Bestehenden Supabase-Benutzer sicher serverseitig laden
+  // ----------------------------------------------------------
+
+  const {
+    data: userData,
+    error: userError,
+  } = await supabase.auth.admin.getUserById(
+    identity.supabase_user_id,
+  );
+
+  if (
+    userError ||
+    !userData.user ||
+    !userData.user.email
+  ) {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        'Das verknüpfte HomeDesk-Konto konnte nicht geladen werden.',
+    };
+  }
+
+  // ----------------------------------------------------------
+  // 3. Einmaligen Supabase-Login-Token erzeugen
+  // ----------------------------------------------------------
+
+  const {
+    data: linkData,
+    error: linkError,
+  } = await supabase.auth.admin.generateLink({
+    type: 'magiclink',
+    email: userData.user.email,
+  });
+
+  if (linkError) {
+    throw linkError;
+  }
+
+  const tokenHash =
+    linkData?.properties?.hashed_token;
+
+  if (
+    typeof tokenHash !== 'string' ||
+    !tokenHash
+  ) {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        'HomeDesk konnte keine sichere Anmeldesitzung erzeugen.',
+    };
+  }
+
+  // ----------------------------------------------------------
+  // 4. Letzten erfolgreichen HA-Login protokollieren
+  // ----------------------------------------------------------
+
+  const {
+    error: updateError,
+  } = await supabase
+    .from('home_assistant_identities')
+    .update({
+      home_assistant_name:
+        typeof currentUser.name === 'string'
+          ? currentUser.name
+          : 'Unbekannter Benutzer',
+
+      last_login_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      'home_assistant_user_id',
+      currentUser.id,
+    );
+
+  if (updateError) {
+    console.error(
+      'Could not update HA last_login_at:',
+      updateError,
+    );
+  }
+
+  return {
+    ok: true,
+    tokenHash,
+  };
+}
+
 export default async (request) => {
   if (request.method !== 'POST') {
     return json(
@@ -527,6 +654,7 @@ export default async (request) => {
     // ========================================================
 
     let linked = false;
+    let homeDeskLogin = null;
 
     if (mode === 'link') {
       const linkResult =
@@ -546,12 +674,41 @@ export default async (request) => {
       }
 
       linked = true;
+    } else {
+      // ======================================================
+      // HA wurde bestätigt -> verknüpftes HomeDesk-Konto laden
+      // ======================================================
+
+      const loginResult =
+        await createHomeDeskLogin(
+          currentUser,
+        );
+
+      if (!loginResult.ok) {
+        return json(
+          {
+            ok: false,
+            error: loginResult.error,
+          },
+          loginResult.status,
+        );
+      }
+
+      linked = true;
+
+      homeDeskLogin = {
+        tokenHash:
+          loginResult.tokenHash,
+
+        type: 'email',
+      };
     }
 
     return json({
       ok: true,
       connected: true,
       linked,
+      homeDeskLogin,
 
       tokenType:
         tokenData.token_type ||

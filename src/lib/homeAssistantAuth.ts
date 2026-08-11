@@ -143,6 +143,11 @@ export type HomeAssistantTokenExchangeResult = {
   apiMessage?: string;
   linked?: boolean;
 
+  homeDeskLogin?: {
+    tokenHash: string;
+    type: 'email';
+  };
+
   user?: {
     id: string;
     name: string;
