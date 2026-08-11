@@ -1,4 +1,16 @@
+import { Capacitor } from '@capacitor/core';
 import { supabase } from './supabase';
+
+function getHomeDeskApiBaseUrl() {
+  if (!Capacitor.isNativePlatform()) {
+    return '';
+  }
+
+  return (
+    import.meta.env.VITE_API_BASE_URL ||
+    'https://homedesk-smaragd.netlify.app'
+  ).replace(/\/+$/, '');
+}
 
 export type HomeAssistantIdentity = {
   userId: string;
@@ -37,7 +49,7 @@ export async function getHomeAssistantIdentity():
     await getAuthorizationHeader();
 
   const response = await fetch(
-    '/.netlify/functions/home-assistant-identity',
+    `${getHomeDeskApiBaseUrl()}/.netlify/functions/home-assistant-identity`,
     {
       method: 'GET',
       headers: {
@@ -68,7 +80,7 @@ export async function disconnectHomeAssistantIdentity() {
     await getAuthorizationHeader();
 
   const response = await fetch(
-    '/.netlify/functions/home-assistant-identity',
+    `${getHomeDeskApiBaseUrl()}/.netlify/functions/home-assistant-identity`,
     {
       method: 'DELETE',
       headers: {

@@ -1,8 +1,23 @@
+import { Capacitor } from '@capacitor/core';
 import { supabase } from './supabase';
 
 const HOME_ASSISTANT_URL = import.meta.env.VITE_HOME_ASSISTANT_URL?.replace(/\/+$/, '');
 
+const PUBLIC_APP_URL = (
+  import.meta.env.VITE_PUBLIC_APP_URL ||
+  'https://homedesk-smaragd.netlify.app'
+).replace(/\/+$/, '');
+
+const NATIVE_REDIRECT_URI =
+  'de.gamixlp.homedesk://auth';
+
 const OAUTH_STATE_KEY = 'homedesk:home-assistant:oauth-state';
+
+function getOAuthStorage() {
+  return Capacitor.isNativePlatform()
+    ? localStorage
+    : sessionStorage;
+}
 const OAUTH_MODE_KEY = 'homedesk:home-assistant:oauth-mode';
 
 export type HomeAssistantAuthMode = 'login' | 'link';
@@ -38,10 +53,18 @@ function createOAuthState() {
 }
 
 export function getHomeAssistantClientId() {
+  if (Capacitor.isNativePlatform()) {
+    return PUBLIC_APP_URL;
+  }
+
   return window.location.origin;
 }
 
 export function getHomeAssistantRedirectUri() {
+  if (Capacitor.isNativePlatform()) {
+    return NATIVE_REDIRECT_URI;
+  }
+
   return `${window.location.origin}/auth/home-assistant/callback`;
 }
 
@@ -50,8 +73,8 @@ export function buildHomeAssistantAuthorizeUrl(
 ) {
   const state = createOAuthState();
 
-  sessionStorage.setItem(OAUTH_STATE_KEY, state);
-  sessionStorage.setItem(OAUTH_MODE_KEY, mode);
+  getOAuthStorage().setItem(OAUTH_STATE_KEY, state);
+  getOAuthStorage().setItem(OAUTH_MODE_KEY, mode);
 
   const authorizeUrl = new URL(
     `${getHomeAssistantUrl()}/auth/authorize`,
@@ -99,7 +122,7 @@ export function consumeHomeAssistantCallback(
 
   const code = params.get('code');
   const returnedState = params.get('state');
-  const expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+  const expectedState = getOAuthStorage().getItem(OAUTH_STATE_KEY);
 
   if (!code) {
     return {
@@ -124,14 +147,14 @@ export function consumeHomeAssistantCallback(
 }
 
 export function getHomeAssistantAuthMode(): HomeAssistantAuthMode {
-  return sessionStorage.getItem(OAUTH_MODE_KEY) === 'link'
+  return getOAuthStorage().getItem(OAUTH_MODE_KEY) === 'link'
     ? 'link'
     : 'login';
 }
 
 export function clearHomeAssistantOAuthState() {
-  sessionStorage.removeItem(OAUTH_STATE_KEY);
-  sessionStorage.removeItem(OAUTH_MODE_KEY);
+  getOAuthStorage().removeItem(OAUTH_STATE_KEY);
+  getOAuthStorage().removeItem(OAUTH_MODE_KEY);
 }
 
 export type HomeAssistantTokenExchangeResult = {
@@ -178,8 +201,15 @@ export async function exchangeHomeAssistantCode(
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
 
+  const apiBaseUrl = Capacitor.isNativePlatform()
+    ? (
+        import.meta.env.VITE_API_BASE_URL ||
+        'https://homedesk-smaragd.netlify.app'
+      ).replace(/\/+$/, '')
+    : '';
+
   const response = await fetch(
-    '/.netlify/functions/home-assistant-token',
+    `${apiBaseUrl}/.netlify/functions/home-assistant-token`,
     {
       method: 'POST',
       headers,
