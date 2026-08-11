@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useAuth } from '../hooks/useAuth';
+import { startHomeAssistantAuthorization } from '../lib/homeAssistantAuth';
 
 export function LoginPage() {
   const { signIn, user } = useAuth();
@@ -90,6 +91,36 @@ export function LoginPage() {
                 {loading ? 'Anmeldung läuft …' : 'Einloggen'} {!loading && <ArrowRight size={17} />}
               </Button>
             </form>
+
+            <div className="my-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                oder
+              </span>
+              <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              onClick={() => {
+                try {
+                  setError('');
+                  startHomeAssistantAuthorization();
+                } catch (nextError) {
+                  setError(
+                    nextError instanceof Error
+                      ? nextError.message
+                      : 'Home-Assistant-Anmeldung konnte nicht gestartet werden.',
+                  );
+                }
+              }}
+            >
+              <Home size={18} />
+              Mit Home Assistant anmelden
+            </Button>
 
             <p className="mt-6 text-center text-xs text-slate-400 lg:hidden">HomeDesk 2.1 · Smart Home Support</p>
           </Card>

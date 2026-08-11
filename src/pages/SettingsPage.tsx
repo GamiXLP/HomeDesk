@@ -1,4 +1,4 @@
-import { Check, Eye, LayoutList, Laptop, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
+import { Check, Eye, Home, LayoutList, Laptop, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { usePreferences, type DashboardRecentCount, type DefaultTicketScope, type TicketPageSize } from '../hooks/usePreferences';
 import { useTheme } from '../hooks/useTheme';
 import { cn } from '../utils/cn';
+import { HomeAssistantSettingsCard } from '../components/settings/HomeAssistantSettingsCard';
 
 export function SettingsPage() {
   const { profile, user, updateDisplayName } = useAuth();
@@ -85,6 +86,8 @@ export function SettingsPage() {
             <ToggleRow label="Archivierte Tickets im Dashboard" text="Standardmäßig werden archivierte Tickets aus der letzten Aktivität ausgeblendet." checked={preferences.showArchivedOnDashboard} onChange={(checked) => updatePreferences({ showArchivedOnDashboard: checked })} />
           </div>
         </Card>
+
+        <HomeAssistantSettingsCard />
 
         <Card className="p-4 sm:p-6">
           <SectionHeader icon={Laptop} title="Schnellzugriff" text="Shortcuts für den Alltag." tone="slate" />

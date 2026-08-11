@@ -8,6 +8,11 @@ const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ def
 const ForgotPasswordPage = lazy(() =>
   import('./pages/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })),
 );
+const HomeAssistantCallbackPage = lazy(() =>
+  import('./pages/HomeAssistantCallbackPage').then((module) => ({
+    default: module.HomeAssistantCallbackPage,
+  })),
+);
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const TicketsPage = lazy(() => import('./pages/TicketsPage').then((module) => ({ default: module.TicketsPage })));
 const NewTicketPage = lazy(() => import('./pages/NewTicketPage').then((module) => ({ default: module.NewTicketPage })));
@@ -34,6 +39,10 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route
+          path="/auth/home-assistant/callback"
+          element={<HomeAssistantCallbackPage />}
+        />
         <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
 
         <Route element={<ProtectedRoute />}>
