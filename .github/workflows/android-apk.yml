@@ -52,6 +52,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_HOME_ASSISTANT_URL: https://5fffjittrkg5loi7cjqcp5bqonfl23or.ui.nabu.casa
           VITE_API_BASE_URL: https://homedesk-smaragd.netlify.app
           VITE_PUBLIC_APP_URL: https://homedesk-smaragd.netlify.app
         run: npm run build

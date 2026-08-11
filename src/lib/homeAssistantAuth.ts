@@ -21,7 +21,7 @@ export type HomeAssistantCallbackResult =
 function getHomeAssistantUrl() {
   if (!HOME_ASSISTANT_URL) {
     throw new Error(
-      'VITE_HOME_ASSISTANT_URL fehlt. Bitte die Variable in .env und Netlify hinterlegen.',
+      'Die Home-Assistant-Adresse ist in diesem HomeDesk-Build nicht konfiguriert.',
     );
   }
 
