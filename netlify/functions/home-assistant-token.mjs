@@ -6,6 +6,167 @@ const json = (data, status = 200) =>
     },
   });
 
+function getHomeAssistantWebSocketUrl(homeAssistantUrl) {
+  const url = new URL(homeAssistantUrl);
+
+  url.protocol =
+    url.protocol === 'https:'
+      ? 'wss:'
+      : 'ws:';
+
+  url.pathname = '/api/websocket';
+  url.search = '';
+  url.hash = '';
+
+  return url.toString();
+}
+
+function getCurrentHomeAssistantUser(
+  homeAssistantUrl,
+  accessToken,
+) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(
+      getHomeAssistantWebSocketUrl(
+        homeAssistantUrl,
+      ),
+    );
+
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      finish(
+        new Error(
+          'Zeitüberschreitung beim Abrufen des Home-Assistant-Benutzers.',
+        ),
+      );
+    }, 10000);
+
+    const finish = (error, result) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+
+      try {
+        socket.close();
+      } catch {
+        // Socket möglicherweise bereits geschlossen.
+      }
+
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(result);
+    };
+
+    socket.addEventListener(
+      'message',
+      (event) => {
+        let message;
+
+        try {
+          message = JSON.parse(
+            String(event.data),
+          );
+        } catch {
+          return;
+        }
+
+        if (
+          message.type ===
+          'auth_required'
+        ) {
+          socket.send(
+            JSON.stringify({
+              type: 'auth',
+              access_token:
+                accessToken,
+            }),
+          );
+
+          return;
+        }
+
+        if (
+          message.type ===
+          'auth_invalid'
+        ) {
+          finish(
+            new Error(
+              'Home Assistant hat den Access Token für die WebSocket-Verbindung abgelehnt.',
+            ),
+          );
+
+          return;
+        }
+
+        if (message.type === 'auth_ok') {
+          socket.send(
+            JSON.stringify({
+              id: 1,
+              type: 'auth/current_user',
+            }),
+          );
+
+          return;
+        }
+
+        if (
+          message.type === 'result' &&
+          message.id === 1
+        ) {
+          if (
+            !message.success ||
+            !message.result
+          ) {
+            finish(
+              new Error(
+                'Der aktuell angemeldete Home-Assistant-Benutzer konnte nicht ermittelt werden.',
+              ),
+            );
+
+            return;
+          }
+
+          finish(
+            null,
+            message.result,
+          );
+        }
+      },
+    );
+
+    socket.addEventListener(
+      'error',
+      () => {
+        finish(
+          new Error(
+            'Die Home-Assistant-WebSocket-Verbindung ist fehlgeschlagen.',
+          ),
+        );
+      },
+    );
+
+    socket.addEventListener(
+      'close',
+      () => {
+        if (!settled) {
+          finish(
+            new Error(
+              'Die Home-Assistant-WebSocket-Verbindung wurde unerwartet beendet.',
+            ),
+          );
+        }
+      },
+    );
+  });
+}
+
 export default async (request) => {
   if (request.method !== 'POST') {
     return json(
@@ -27,7 +188,8 @@ export default async (request) => {
     return json(
       {
         ok: false,
-        error: 'HOME_ASSISTANT_URL ist serverseitig nicht konfiguriert.',
+        error:
+          'HOME_ASSISTANT_URL ist serverseitig nicht konfiguriert.',
       },
       500,
     );
@@ -36,24 +198,28 @@ export default async (request) => {
   let payload;
 
   try {
-    payload = await request.json();
+    payload =
+      await request.json();
   } catch {
     return json(
       {
         ok: false,
-        error: 'Ungültige Anfrage.',
+        error:
+          'Ungültige Anfrage.',
       },
       400,
     );
   }
 
   const code =
-    typeof payload?.code === 'string'
+    typeof payload?.code ===
+    'string'
       ? payload.code.trim()
       : '';
 
   const clientId =
-    typeof payload?.clientId === 'string'
+    typeof payload?.clientId ===
+    'string'
       ? payload.clientId.trim()
       : '';
 
@@ -61,34 +227,43 @@ export default async (request) => {
     return json(
       {
         ok: false,
-        error: 'Authorization Code oder Client ID fehlt.',
+        error:
+          'Authorization Code oder Client ID fehlt.',
       },
       400,
     );
   }
 
   try {
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      client_id: clientId,
-    });
+    // ========================================================
+    // 1. Authorization Code gegen HA Token tauschen
+    // ========================================================
 
-    const tokenResponse = await fetch(
-      `${homeAssistantUrl}/auth/token`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type':
-            'application/x-www-form-urlencoded',
+    const body =
+      new URLSearchParams({
+        grant_type:
+          'authorization_code',
+        code,
+        client_id: clientId,
+      });
+
+    const tokenResponse =
+      await fetch(
+        `${homeAssistantUrl}/auth/token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/x-www-form-urlencoded',
+          },
+          body,
         },
-        body,
-      },
-    );
+      );
 
-    const tokenData = await tokenResponse
-      .json()
-      .catch(() => ({}));
+    const tokenData =
+      await tokenResponse
+        .json()
+        .catch(() => ({}));
 
     if (!tokenResponse.ok) {
       console.error(
@@ -101,7 +276,8 @@ export default async (request) => {
         {
           ok: false,
           error:
-            tokenData?.error_description ||
+            tokenData
+              ?.error_description ||
             tokenData?.error ||
             `Home Assistant Token-Austausch fehlgeschlagen (${tokenResponse.status}).`,
         },
@@ -109,9 +285,13 @@ export default async (request) => {
       );
     }
 
+    const accessToken =
+      tokenData.access_token;
+
     if (
-      typeof tokenData.access_token !== 'string' ||
-      !tokenData.access_token
+      typeof accessToken !==
+        'string' ||
+      !accessToken
     ) {
       return json(
         {
@@ -123,56 +303,108 @@ export default async (request) => {
       );
     }
 
-    // --------------------------------------------------------
-    // Verbindung direkt einmal gegen die HA REST API prüfen.
-    // --------------------------------------------------------
+    // ========================================================
+    // 2. REST API prüfen
+    // ========================================================
 
-    const apiResponse = await fetch(
-      `${homeAssistantUrl}/api/`,
-      {
-        headers: {
-          Authorization:
-            `Bearer ${tokenData.access_token}`,
+    const apiResponse =
+      await fetch(
+        `${homeAssistantUrl}/api/`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${accessToken}`,
+          },
         },
-      },
-    );
+      );
 
-    const apiData = await apiResponse
-      .json()
-      .catch(() => ({}));
+    const apiData =
+      await apiResponse
+        .json()
+        .catch(() => ({}));
 
     if (!apiResponse.ok) {
       return json(
         {
           ok: false,
           error:
-            'Der Token wurde erstellt, konnte aber nicht gegen die Home-Assistant-API validiert werden.',
+            'Der Home-Assistant-Zugang konnte nicht validiert werden.',
+        },
+        502,
+      );
+    }
+
+    // ========================================================
+    // 3. Aktuell angemeldeten HA-Benutzer ermitteln
+    // ========================================================
+
+    const currentUser =
+      await getCurrentHomeAssistantUser(
+        homeAssistantUrl,
+        accessToken,
+      );
+
+    if (
+      !currentUser ||
+      typeof currentUser.id !==
+        'string'
+    ) {
+      return json(
+        {
+          ok: false,
+          error:
+            'Home Assistant hat keine gültigen Benutzerinformationen zurückgegeben.',
         },
         502,
       );
     }
 
     // WICHTIG:
-    // Access- und Refresh-Token werden absichtlich NICHT
-    // an das Frontend zurückgegeben.
-    // Persistente Speicherung kommt im nächsten Schritt.
+    // Noch immer keine Tokens ans Frontend geben.
+    // Wir schicken nur harmlose Identitätsdaten zurück.
 
     return json({
       ok: true,
       connected: true,
+
       tokenType:
-        tokenData.token_type || 'Bearer',
+        tokenData.token_type ||
+        'Bearer',
+
       expiresIn:
-        typeof tokenData.expires_in === 'number'
+        typeof tokenData.expires_in ===
+        'number'
           ? tokenData.expires_in
           : null,
+
       refreshTokenReceived:
-        typeof tokenData.refresh_token === 'string' &&
-        tokenData.refresh_token.length > 0,
+        typeof tokenData.refresh_token ===
+          'string' &&
+        tokenData.refresh_token.length >
+          0,
+
       apiMessage:
-        typeof apiData?.message === 'string'
+        typeof apiData?.message ===
+        'string'
           ? apiData.message
           : 'Home Assistant API erreichbar',
+
+      user: {
+        id: currentUser.id,
+        name:
+          typeof currentUser.name ===
+          'string'
+            ? currentUser.name
+            : 'Unbekannter Benutzer',
+
+        isAdmin:
+          currentUser.is_admin ===
+          true,
+
+        isOwner:
+          currentUser.is_owner ===
+          true,
+      },
     });
   } catch (error) {
     console.error(
@@ -184,7 +416,9 @@ export default async (request) => {
       {
         ok: false,
         error:
-          'Home Assistant konnte vom HomeDesk-Server nicht erreicht werden.',
+          error instanceof Error
+            ? error.message
+            : 'Home Assistant konnte vom HomeDesk-Server nicht erreicht werden.',
       },
       502,
     );

@@ -124,6 +124,14 @@ export type HomeAssistantTokenExchangeResult = {
   expiresIn?: number | null;
   refreshTokenReceived?: boolean;
   apiMessage?: string;
+
+  user?: {
+    id: string;
+    name: string;
+    isAdmin: boolean;
+    isOwner: boolean;
+  };
+
   error?: string;
 };
 
