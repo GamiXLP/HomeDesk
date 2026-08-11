@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { encryptHomeAssistantRefreshToken } from '../lib/home-assistant-crypto.mjs';
 
 const json = (data, status = 200) =>
   Response.json(data, {
@@ -471,6 +472,71 @@ async function createHomeDeskLogin(
   };
 }
 
+
+async function storeHomeAssistantRefreshToken(
+  currentUser,
+  refreshToken,
+  clientId,
+) {
+  if (
+    typeof refreshToken !== 'string' ||
+    !refreshToken
+  ) {
+    throw new Error(
+      'Home Assistant hat keinen Refresh Token zurückgegeben.',
+    );
+  }
+
+  const encrypted =
+    encryptHomeAssistantRefreshToken(
+      refreshToken,
+      currentUser.id,
+    );
+
+  const supabase =
+    createSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('home_assistant_identities')
+    .update({
+      refresh_token_encrypted:
+        encrypted.encrypted,
+
+      refresh_token_iv:
+        encrypted.iv,
+
+      refresh_token_auth_tag:
+        encrypted.authTag,
+
+      token_client_id:
+        clientId,
+
+      token_updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      'home_assistant_user_id',
+      currentUser.id,
+    )
+    .select(
+      'home_assistant_user_id',
+    )
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error(
+      'Für diesen Home-Assistant-Benutzer wurde keine HomeDesk-Verknüpfung gefunden.',
+    );
+  }
+}
+
 export default async (request) => {
   if (request.method !== 'POST') {
     return json(
@@ -703,6 +769,16 @@ export default async (request) => {
         type: 'email',
       };
     }
+
+    // ========================================================
+    // 5. Refresh Token verschlüsselt speichern
+    // ========================================================
+
+    await storeHomeAssistantRefreshToken(
+      currentUser,
+      tokenData.refresh_token,
+      clientId,
+    );
 
     return json({
       ok: true,
