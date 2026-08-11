@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 const json = (data, status = 200) =>
   Response.json(data, {
     status,
@@ -27,9 +29,7 @@ function getCurrentHomeAssistantUser(
 ) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(
-      getHomeAssistantWebSocketUrl(
-        homeAssistantUrl,
-      ),
+      getHomeAssistantWebSocketUrl(homeAssistantUrl),
     );
 
     let settled = false;
@@ -43,9 +43,7 @@ function getCurrentHomeAssistantUser(
     }, 10000);
 
     const finish = (error, result) => {
-      if (settled) {
-        return;
-      }
+      if (settled) return;
 
       settled = true;
       clearTimeout(timeout);
@@ -53,7 +51,7 @@ function getCurrentHomeAssistantUser(
       try {
         socket.close();
       } catch {
-        // Socket möglicherweise bereits geschlossen.
+        // Socket bereits geschlossen.
       }
 
       if (error) {
@@ -64,107 +62,286 @@ function getCurrentHomeAssistantUser(
       resolve(result);
     };
 
-    socket.addEventListener(
-      'message',
-      (event) => {
-        let message;
+    socket.addEventListener('message', (event) => {
+      let message;
 
-        try {
-          message = JSON.parse(
-            String(event.data),
-          );
-        } catch {
-          return;
-        }
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
 
-        if (
-          message.type ===
-          'auth_required'
-        ) {
-          socket.send(
-            JSON.stringify({
-              type: 'auth',
-              access_token:
-                accessToken,
-            }),
-          );
+      if (message.type === 'auth_required') {
+        socket.send(
+          JSON.stringify({
+            type: 'auth',
+            access_token: accessToken,
+          }),
+        );
+        return;
+      }
 
-          return;
-        }
-
-        if (
-          message.type ===
-          'auth_invalid'
-        ) {
-          finish(
-            new Error(
-              'Home Assistant hat den Access Token für die WebSocket-Verbindung abgelehnt.',
-            ),
-          );
-
-          return;
-        }
-
-        if (message.type === 'auth_ok') {
-          socket.send(
-            JSON.stringify({
-              id: 1,
-              type: 'auth/current_user',
-            }),
-          );
-
-          return;
-        }
-
-        if (
-          message.type === 'result' &&
-          message.id === 1
-        ) {
-          if (
-            !message.success ||
-            !message.result
-          ) {
-            finish(
-              new Error(
-                'Der aktuell angemeldete Home-Assistant-Benutzer konnte nicht ermittelt werden.',
-              ),
-            );
-
-            return;
-          }
-
-          finish(
-            null,
-            message.result,
-          );
-        }
-      },
-    );
-
-    socket.addEventListener(
-      'error',
-      () => {
+      if (message.type === 'auth_invalid') {
         finish(
           new Error(
-            'Die Home-Assistant-WebSocket-Verbindung ist fehlgeschlagen.',
+            'Home Assistant hat den Access Token abgelehnt.',
           ),
         );
-      },
-    );
+        return;
+      }
 
-    socket.addEventListener(
-      'close',
-      () => {
-        if (!settled) {
+      if (message.type === 'auth_ok') {
+        socket.send(
+          JSON.stringify({
+            id: 1,
+            type: 'auth/current_user',
+          }),
+        );
+        return;
+      }
+
+      if (
+        message.type === 'result' &&
+        message.id === 1
+      ) {
+        if (!message.success || !message.result) {
           finish(
             new Error(
-              'Die Home-Assistant-WebSocket-Verbindung wurde unerwartet beendet.',
+              'Der angemeldete Home-Assistant-Benutzer konnte nicht ermittelt werden.',
             ),
           );
+          return;
         }
-      },
-    );
+
+        finish(null, message.result);
+      }
+    });
+
+    socket.addEventListener('error', () => {
+      finish(
+        new Error(
+          'Die Home-Assistant-WebSocket-Verbindung ist fehlgeschlagen.',
+        ),
+      );
+    });
+
+    socket.addEventListener('close', () => {
+      if (!settled) {
+        finish(
+          new Error(
+            'Die Home-Assistant-WebSocket-Verbindung wurde unerwartet beendet.',
+          ),
+        );
+      }
+    });
   });
+}
+
+function createSupabaseAdmin() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      'Supabase ist serverseitig nicht vollständig konfiguriert.',
+    );
+  }
+
+  return createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
+}
+
+async function linkHomeAssistantIdentity(
+  request,
+  currentUser,
+) {
+  const authorization =
+    request.headers.get('authorization') || '';
+
+  if (!authorization.startsWith('Bearer ')) {
+    return {
+      ok: false,
+      status: 401,
+      error:
+        'Für die Verknüpfung ist eine HomeDesk-Anmeldung erforderlich.',
+    };
+  }
+
+  const homeDeskAccessToken =
+    authorization
+      .slice('Bearer '.length)
+      .trim();
+
+  if (!homeDeskAccessToken) {
+    return {
+      ok: false,
+      status: 401,
+      error:
+        'Die HomeDesk-Sitzung konnte nicht bestätigt werden.',
+    };
+  }
+
+  const supabase = createSupabaseAdmin();
+
+  const {
+    data: userData,
+    error: userError,
+  } = await supabase.auth.getUser(
+    homeDeskAccessToken,
+  );
+
+  if (
+    userError ||
+    !userData.user
+  ) {
+    return {
+      ok: false,
+      status: 401,
+      error:
+        'Deine HomeDesk-Sitzung ist ungültig oder abgelaufen.',
+    };
+  }
+
+  const homeDeskUserId =
+    userData.user.id;
+
+  const homeAssistantUserId =
+    currentUser.id;
+
+  // ----------------------------------------------------------
+  // Neues HA-Konto darf nicht bereits einem anderen
+  // HomeDesk-Konto gehören.
+  // ----------------------------------------------------------
+
+  const {
+    data: existingHaIdentity,
+    error: existingHaError,
+  } = await supabase
+    .from('home_assistant_identities')
+    .select(
+      'home_assistant_user_id, supabase_user_id',
+    )
+    .eq(
+      'home_assistant_user_id',
+      homeAssistantUserId,
+    )
+    .maybeSingle();
+
+  if (existingHaError) {
+    throw existingHaError;
+  }
+
+  if (
+    existingHaIdentity &&
+    existingHaIdentity.supabase_user_id !==
+      homeDeskUserId
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        'Dieses Home-Assistant-Konto ist bereits mit einem anderen HomeDesk-Konto verknüpft.',
+    };
+  }
+
+  // ----------------------------------------------------------
+  // Bestehende Verknüpfung dieses HomeDesk-Kontos suchen.
+  // ----------------------------------------------------------
+
+  const {
+    data: existingHomeDeskIdentity,
+    error: existingHomeDeskError,
+  } = await supabase
+    .from('home_assistant_identities')
+    .select(
+      'home_assistant_user_id, supabase_user_id',
+    )
+    .eq(
+      'supabase_user_id',
+      homeDeskUserId,
+    )
+    .maybeSingle();
+
+  if (existingHomeDeskError) {
+    throw existingHomeDeskError;
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const values = {
+    home_assistant_user_id:
+      homeAssistantUserId,
+
+    home_assistant_name:
+      typeof currentUser.name === 'string'
+        ? currentUser.name
+        : 'Unbekannter Benutzer',
+
+    last_login_at: now,
+  };
+
+  // ----------------------------------------------------------
+  // Wenn bereits ein HA-Konto verbunden ist, wird die
+  // bestehende Zeile atomar auf die neue HA-ID aktualisiert.
+  //
+  // Dadurch bleibt die alte Verbindung bestehen, solange
+  // der neue OAuth-Flow nicht erfolgreich abgeschlossen ist.
+  // ----------------------------------------------------------
+
+  if (existingHomeDeskIdentity) {
+    const {
+      error: updateError,
+    } = await supabase
+      .from('home_assistant_identities')
+      .update(values)
+      .eq(
+        'supabase_user_id',
+        homeDeskUserId,
+      );
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return {
+      ok: true,
+      linked: true,
+      switched:
+        existingHomeDeskIdentity
+          .home_assistant_user_id !==
+        homeAssistantUserId,
+    };
+  }
+
+  const {
+    error: insertError,
+  } = await supabase
+    .from('home_assistant_identities')
+    .insert({
+      ...values,
+      supabase_user_id:
+        homeDeskUserId,
+    });
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return {
+    ok: true,
+    linked: true,
+    switched: false,
+  };
 }
 
 export default async (request) => {
@@ -198,30 +375,31 @@ export default async (request) => {
   let payload;
 
   try {
-    payload =
-      await request.json();
+    payload = await request.json();
   } catch {
     return json(
       {
         ok: false,
-        error:
-          'Ungültige Anfrage.',
+        error: 'Ungültige Anfrage.',
       },
       400,
     );
   }
 
   const code =
-    typeof payload?.code ===
-    'string'
+    typeof payload?.code === 'string'
       ? payload.code.trim()
       : '';
 
   const clientId =
-    typeof payload?.clientId ===
-    'string'
+    typeof payload?.clientId === 'string'
       ? payload.clientId.trim()
       : '';
+
+  const mode =
+    payload?.mode === 'link'
+      ? 'link'
+      : 'login';
 
   if (!code || !clientId) {
     return json(
@@ -239,45 +417,34 @@ export default async (request) => {
     // 1. Authorization Code gegen HA Token tauschen
     // ========================================================
 
-    const body =
-      new URLSearchParams({
-        grant_type:
-          'authorization_code',
-        code,
-        client_id: clientId,
-      });
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: clientId,
+    });
 
-    const tokenResponse =
-      await fetch(
-        `${homeAssistantUrl}/auth/token`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/x-www-form-urlencoded',
-          },
-          body,
+    const tokenResponse = await fetch(
+      `${homeAssistantUrl}/auth/token`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded',
         },
-      );
+        body,
+      },
+    );
 
-    const tokenData =
-      await tokenResponse
-        .json()
-        .catch(() => ({}));
+    const tokenData = await tokenResponse
+      .json()
+      .catch(() => ({}));
 
     if (!tokenResponse.ok) {
-      console.error(
-        'Home Assistant token exchange failed:',
-        tokenResponse.status,
-        tokenData?.error,
-      );
-
       return json(
         {
           ok: false,
           error:
-            tokenData
-              ?.error_description ||
+            tokenData?.error_description ||
             tokenData?.error ||
             `Home Assistant Token-Austausch fehlgeschlagen (${tokenResponse.status}).`,
         },
@@ -289,8 +456,7 @@ export default async (request) => {
       tokenData.access_token;
 
     if (
-      typeof accessToken !==
-        'string' ||
+      typeof accessToken !== 'string' ||
       !accessToken
     ) {
       return json(
@@ -307,21 +473,19 @@ export default async (request) => {
     // 2. REST API prüfen
     // ========================================================
 
-    const apiResponse =
-      await fetch(
-        `${homeAssistantUrl}/api/`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
+    const apiResponse = await fetch(
+      `${homeAssistantUrl}/api/`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
         },
-      );
+      },
+    );
 
-    const apiData =
-      await apiResponse
-        .json()
-        .catch(() => ({}));
+    const apiData = await apiResponse
+      .json()
+      .catch(() => ({}));
 
     if (!apiResponse.ok) {
       return json(
@@ -335,7 +499,7 @@ export default async (request) => {
     }
 
     // ========================================================
-    // 3. Aktuell angemeldeten HA-Benutzer ermitteln
+    // 3. Angemeldeten HA-Benutzer ermitteln
     // ========================================================
 
     const currentUser =
@@ -346,8 +510,7 @@ export default async (request) => {
 
     if (
       !currentUser ||
-      typeof currentUser.id !==
-        'string'
+      typeof currentUser.id !== 'string'
     ) {
       return json(
         {
@@ -359,51 +522,68 @@ export default async (request) => {
       );
     }
 
-    // WICHTIG:
-    // Noch immer keine Tokens ans Frontend geben.
-    // Wir schicken nur harmlose Identitätsdaten zurück.
+    // ========================================================
+    // 4. Optional: mit aktuellem HomeDesk-Konto verknüpfen
+    // ========================================================
+
+    let linked = false;
+
+    if (mode === 'link') {
+      const linkResult =
+        await linkHomeAssistantIdentity(
+          request,
+          currentUser,
+        );
+
+      if (!linkResult.ok) {
+        return json(
+          {
+            ok: false,
+            error: linkResult.error,
+          },
+          linkResult.status,
+        );
+      }
+
+      linked = true;
+    }
 
     return json({
       ok: true,
       connected: true,
+      linked,
 
       tokenType:
         tokenData.token_type ||
         'Bearer',
 
       expiresIn:
-        typeof tokenData.expires_in ===
-        'number'
+        typeof tokenData.expires_in === 'number'
           ? tokenData.expires_in
           : null,
 
       refreshTokenReceived:
-        typeof tokenData.refresh_token ===
-          'string' &&
-        tokenData.refresh_token.length >
-          0,
+        typeof tokenData.refresh_token === 'string' &&
+        tokenData.refresh_token.length > 0,
 
       apiMessage:
-        typeof apiData?.message ===
-        'string'
+        typeof apiData?.message === 'string'
           ? apiData.message
           : 'Home Assistant API erreichbar',
 
       user: {
         id: currentUser.id,
+
         name:
-          typeof currentUser.name ===
-          'string'
+          typeof currentUser.name === 'string'
             ? currentUser.name
             : 'Unbekannter Benutzer',
 
         isAdmin:
-          currentUser.is_admin ===
-          true,
+          currentUser.is_admin === true,
 
         isOwner:
-          currentUser.is_owner ===
-          true,
+          currentUser.is_owner === true,
       },
     });
   } catch (error) {

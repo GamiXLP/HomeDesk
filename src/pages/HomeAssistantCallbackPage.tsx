@@ -18,6 +18,7 @@ import {
   clearHomeAssistantOAuthState,
   consumeHomeAssistantCallback,
   exchangeHomeAssistantCode,
+  getHomeAssistantAuthMode,
   type HomeAssistantTokenExchangeResult,
 } from '../lib/homeAssistantAuth';
 
@@ -40,6 +41,11 @@ export function HomeAssistantCallbackPage() {
       consumeHomeAssistantCallback(
         window.location.search,
       ),
+    [],
+  );
+
+  const authMode = useMemo(
+    () => getHomeAssistantAuthMode(),
     [],
   );
 
@@ -73,6 +79,7 @@ export function HomeAssistantCallbackPage() {
         const result =
           await exchangeHomeAssistantCode(
             callbackResult.code,
+            authMode,
           );
 
         setExchangeState({
@@ -93,7 +100,7 @@ export function HomeAssistantCallbackPage() {
     };
 
     void exchange();
-  }, [callbackResult]);
+  }, [callbackResult, authMode]);
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 p-4 transition-colors dark:bg-slate-950 sm:p-8">
@@ -145,13 +152,15 @@ export function HomeAssistantCallbackPage() {
             </div>
 
             <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-              Verbindung erfolgreich
+              {authMode === 'link'
+                ? 'Konto erfolgreich verknüpft'
+                : 'Verbindung erfolgreich'}
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              HomeDesk konnte einen gültigen
-              Home-Assistant-Zugang erstellen und
-              die API erfolgreich erreichen.
+              {authMode === 'link'
+                ? 'Dein Home-Assistant-Benutzer wurde erfolgreich mit deinem bestehenden HomeDesk-Konto verknüpft.'
+                : 'HomeDesk konnte einen gültigen Home-Assistant-Zugang erstellen und die API erfolgreich erreichen.'}
             </p>
 
             <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
@@ -222,14 +231,16 @@ export function HomeAssistantCallbackPage() {
         )}
 
         <Link
-          to="/login"
+          to={authMode === 'link' ? '/app/settings' : '/login'}
           className="mt-8 block"
         >
           <Button
             className="w-full"
             variant="secondary"
           >
-            Zurück zur Anmeldung
+            {authMode === 'link'
+              ? 'Zurück zu den Einstellungen'
+              : 'Zurück zur Anmeldung'}
           </Button>
         </Link>
       </Card>

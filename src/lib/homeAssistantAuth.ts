@@ -1,6 +1,11 @@
+import { supabase } from './supabase';
+
 const HOME_ASSISTANT_URL = import.meta.env.VITE_HOME_ASSISTANT_URL?.replace(/\/+$/, '');
 
 const OAUTH_STATE_KEY = 'homedesk:home-assistant:oauth-state';
+const OAUTH_MODE_KEY = 'homedesk:home-assistant:oauth-mode';
+
+export type HomeAssistantAuthMode = 'login' | 'link';
 
 export type HomeAssistantCallbackResult =
   | {
@@ -40,10 +45,13 @@ export function getHomeAssistantRedirectUri() {
   return `${window.location.origin}/auth/home-assistant/callback`;
 }
 
-export function buildHomeAssistantAuthorizeUrl() {
+export function buildHomeAssistantAuthorizeUrl(
+  mode: HomeAssistantAuthMode = 'login',
+) {
   const state = createOAuthState();
 
   sessionStorage.setItem(OAUTH_STATE_KEY, state);
+  sessionStorage.setItem(OAUTH_MODE_KEY, mode);
 
   const authorizeUrl = new URL(
     `${getHomeAssistantUrl()}/auth/authorize`,
@@ -67,8 +75,10 @@ export function buildHomeAssistantAuthorizeUrl() {
   return authorizeUrl.toString();
 }
 
-export function startHomeAssistantAuthorization() {
-  window.location.assign(buildHomeAssistantAuthorizeUrl());
+export function startHomeAssistantAuthorization(
+  mode: HomeAssistantAuthMode = 'login',
+) {
+  window.location.assign(buildHomeAssistantAuthorizeUrl(mode));
 }
 
 export function consumeHomeAssistantCallback(
@@ -113,8 +123,15 @@ export function consumeHomeAssistantCallback(
   };
 }
 
+export function getHomeAssistantAuthMode(): HomeAssistantAuthMode {
+  return sessionStorage.getItem(OAUTH_MODE_KEY) === 'link'
+    ? 'link'
+    : 'login';
+}
+
 export function clearHomeAssistantOAuthState() {
   sessionStorage.removeItem(OAUTH_STATE_KEY);
+  sessionStorage.removeItem(OAUTH_MODE_KEY);
 }
 
 export type HomeAssistantTokenExchangeResult = {
@@ -124,6 +141,7 @@ export type HomeAssistantTokenExchangeResult = {
   expiresIn?: number | null;
   refreshTokenReceived?: boolean;
   apiMessage?: string;
+  linked?: boolean;
 
   user?: {
     id: string;
@@ -137,17 +155,33 @@ export type HomeAssistantTokenExchangeResult = {
 
 export async function exchangeHomeAssistantCode(
   code: string,
+  mode: HomeAssistantAuthMode = 'login',
 ): Promise<HomeAssistantTokenExchangeResult> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (mode === 'link') {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data.session?.access_token) {
+      throw new Error(
+        'Du musst in HomeDesk angemeldet sein, um dein Home-Assistant-Konto zu verknüpfen.',
+      );
+    }
+
+    headers.Authorization = `Bearer ${data.session.access_token}`;
+  }
+
   const response = await fetch(
     '/.netlify/functions/home-assistant-token',
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         code,
         clientId: getHomeAssistantClientId(),
+        mode,
       }),
     },
   );
