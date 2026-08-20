@@ -17,6 +17,34 @@ export const COMMENT_IMAGE_MAX_COUNT = 5;
 export const COMMENT_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const COMMENT_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+export async function downloadTicketAttachment(
+  filePath: string,
+): Promise<Blob> {
+  const { data, error } = await supabase.storage
+    .from(TICKET_ATTACHMENTS_BUCKET)
+    .download(filePath);
+
+  if (error) {
+    console.error(
+      'Ticket attachment download failed:',
+      error,
+    );
+
+    throw new Error(
+      error.message ||
+        'Der Bildanhang konnte nicht geladen werden.',
+    );
+  }
+
+  if (!data) {
+    throw new Error(
+      'Der Bildanhang konnte nicht geladen werden.',
+    );
+  }
+
+  return data;
+}
+
 export async function getTickets() {
   const { data, error } = await supabase
     .from('tickets')

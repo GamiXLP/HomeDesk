@@ -15,6 +15,9 @@ import {
   Tag,
   Trash2,
   UserRound,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -32,6 +35,7 @@ import {
   COMMENT_IMAGE_MAX_SIZE_BYTES,
   COMMENT_IMAGE_MIME_TYPES,
   deleteTicketAdmin,
+  downloadTicketAttachment,
   getComments,
   getProfiles,
   getTicket,
@@ -597,13 +601,527 @@ function Comment({ comment }: { comment: TicketComment }) {
   );
 }
 
-function CommentAttachmentPreview({ attachment }: { attachment: TicketAttachment }) {
-  if (!attachment.signed_url) return <div className="rounded-2xl bg-slate-100 p-3 text-xs text-slate-500 dark:bg-slate-800"><p className="truncate font-bold">{attachment.file_name}</p><p>Vorschau nicht verfügbar</p></div>;
+function CommentAttachmentPreview({
+  attachment,
+}: {
+  attachment: TicketAttachment;
+}) {
+  const [imageUrl, setImageUrl] =
+    useState<string | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [loadError, setLoadError] =
+    useState<string | null>(null);
+
+  const [viewerOpen, setViewerOpen] =
+    useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl: string | null = null;
+
+    setLoading(true);
+    setLoadError(null);
+
+    void downloadTicketAttachment(
+      attachment.file_path,
+    )
+      .then((blob: Blob) => {
+        if (disposed) {
+          return;
+        }
+
+        objectUrl =
+          URL.createObjectURL(blob);
+
+        setImageUrl(objectUrl);
+      })
+      .catch((error: unknown) => {
+        if (disposed) {
+          return;
+        }
+
+        console.error(
+          'Attachment could not be loaded:',
+          error,
+        );
+
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : 'Bild konnte nicht geladen werden.',
+        );
+      })
+      .finally(() => {
+        if (!disposed) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      disposed = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(
+          objectUrl,
+        );
+      }
+    };
+  }, [attachment.file_path]);
+
+  if (loading) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+        <div className="h-40 animate-pulse bg-slate-200 dark:bg-slate-700" />
+
+        <div className="p-3">
+          <div className="h-3 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    loadError ||
+    !imageUrl
+  ) {
+    return (
+      <div className="rounded-2xl border border-red-100 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+        <div className="flex items-center gap-2 text-red-600 dark:text-red-300">
+          <ImagePlus size={18} />
+
+          <p className="text-xs font-bold">
+            Bild konnte nicht geladen werden
+          </p>
+        </div>
+
+        <p className="mt-2 break-words text-xs text-slate-600 dark:text-slate-300">
+          {attachment.file_name}
+        </p>
+
+        {loadError && (
+          <p className="mt-1 text-[10px] text-red-500">
+            {loadError}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <a href={attachment.signed_url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 transition hover:border-sky-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-sky-700">
-      <img src={attachment.signed_url} alt={attachment.file_name} className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.02]" loading="lazy" decoding="async" />
-      <div className="p-2.5"><p className="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{attachment.file_name}</p><p className="text-[10px] text-slate-400">{formatFileSize(attachment.file_size)}</p></div>
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          setViewerOpen(true)
+        }
+        className="group block w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-left transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800"
+      >
+        <div className="relative overflow-hidden bg-slate-100 dark:bg-slate-900">
+          <img
+            src={imageUrl}
+            alt={attachment.file_name}
+            className="h-44 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+            loading="lazy"
+            decoding="async"
+          />
+
+          <div className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-lg backdrop-blur">
+            <ZoomIn size={17} />
+          </div>
+        </div>
+
+        <div className="p-3">
+          <p className="truncate text-xs font-bold text-slate-700 dark:text-slate-200">
+            {attachment.file_name}
+          </p>
+
+          <p className="mt-0.5 text-[10px] text-slate-400">
+            {formatFileSize(
+              attachment.file_size,
+            )} · Antippen zum Vergrößern
+          </p>
+        </div>
+      </button>
+
+      {viewerOpen && (
+        <ImageLightbox
+          src={imageUrl}
+          alt={attachment.file_name}
+          onClose={() =>
+            setViewerOpen(false)
+          }
+        />
+      )}
+    </>
+  );
+}
+
+function ImageLightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const [scale, setScale] =
+    useState(1);
+
+  const [offset, setOffset] =
+    useState({
+      x: 0,
+      y: 0,
+    });
+
+  const pointers = useRef(
+    new Map<
+      number,
+      {
+        x: number;
+        y: number;
+      }
+    >(),
+  );
+
+  const gesture = useRef({
+    initialDistance: 0,
+    initialScale: 1,
+    lastX: 0,
+    lastY: 0,
+  });
+
+  const clampScale = (
+    value: number,
+  ) =>
+    Math.min(
+      5,
+      Math.max(1, value),
+    );
+
+  const reset = () => {
+    setScale(1);
+
+    setOffset({
+      x: 0,
+      y: 0,
+    });
+  };
+
+  useEffect(() => {
+    const previousOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow =
+      'hidden';
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+
+      if (event.key === '+') {
+        setScale((current) =>
+          clampScale(
+            current + 0.5,
+          ),
+        );
+      }
+
+      if (event.key === '-') {
+        setScale((current) =>
+          clampScale(
+            current - 0.5,
+          ),
+        );
+      }
+    };
+
+    window.addEventListener(
+      'keydown',
+      handleKeyDown,
+    );
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      window.removeEventListener(
+        'keydown',
+        handleKeyDown,
+      );
+    };
+  }, [onClose]);
+
+  const pointerDistance = () => {
+    const values =
+      Array.from(
+        pointers.current.values(),
+      );
+
+    if (values.length < 2) {
+      return 0;
+    }
+
+    return Math.hypot(
+      values[0].x - values[1].x,
+      values[0].y - values[1].y,
+    );
+  };
+
+  const handlePointerDown = (
+    event:
+      React.PointerEvent<HTMLDivElement>,
+  ) => {
+    event.currentTarget
+      .setPointerCapture(
+        event.pointerId,
+      );
+
+    pointers.current.set(
+      event.pointerId,
+      {
+        x: event.clientX,
+        y: event.clientY,
+      },
+    );
+
+    if (
+      pointers.current.size === 2
+    ) {
+      gesture.current.initialDistance =
+        pointerDistance();
+
+      gesture.current.initialScale =
+        scale;
+    } else {
+      gesture.current.lastX =
+        event.clientX;
+
+      gesture.current.lastY =
+        event.clientY;
+    }
+  };
+
+  const handlePointerMove = (
+    event:
+      React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (
+      !pointers.current.has(
+        event.pointerId,
+      )
+    ) {
+      return;
+    }
+
+    pointers.current.set(
+      event.pointerId,
+      {
+        x: event.clientX,
+        y: event.clientY,
+      },
+    );
+
+    if (
+      pointers.current.size >= 2
+    ) {
+      const distance =
+        pointerDistance();
+
+      if (
+        gesture.current
+          .initialDistance > 0
+      ) {
+        setScale(
+          clampScale(
+            gesture.current
+              .initialScale *
+              (
+                distance /
+                gesture.current
+                  .initialDistance
+              ),
+          ),
+        );
+      }
+
+      return;
+    }
+
+    if (scale <= 1) {
+      return;
+    }
+
+    const deltaX =
+      event.clientX -
+      gesture.current.lastX;
+
+    const deltaY =
+      event.clientY -
+      gesture.current.lastY;
+
+    gesture.current.lastX =
+      event.clientX;
+
+    gesture.current.lastY =
+      event.clientY;
+
+    setOffset((current) => ({
+      x: current.x + deltaX,
+      y: current.y + deltaY,
+    }));
+  };
+
+  const releasePointer = (
+    event:
+      React.PointerEvent<HTMLDivElement>,
+  ) => {
+    pointers.current.delete(
+      event.pointerId,
+    );
+
+    const remaining =
+      Array.from(
+        pointers.current.values(),
+      );
+
+    if (
+      remaining.length === 1
+    ) {
+      gesture.current.lastX =
+        remaining[0].x;
+
+      gesture.current.lastY =
+        remaining[0].y;
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex flex-col bg-slate-950/98 text-white"
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3 [padding-top:calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold">
+            {alt}
+          </p>
+
+          <p className="mt-0.5 text-[10px] text-slate-400">
+            {Math.round(scale * 100)} %
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 transition active:scale-95"
+          aria-label="Bild schließen"
+        >
+          <X size={22} />
+        </button>
+      </div>
+
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden touch-none"
+        onPointerDown={
+          handlePointerDown
+        }
+        onPointerMove={
+          handlePointerMove
+        }
+        onPointerUp={
+          releasePointer
+        }
+        onPointerCancel={
+          releasePointer
+        }
+        onWheel={(event) => {
+          event.preventDefault();
+
+          setScale((current) =>
+            clampScale(
+              current +
+                (
+                  event.deltaY < 0
+                    ? 0.25
+                    : -0.25
+                ),
+            ),
+          );
+        }}
+        onDoubleClick={() => {
+          if (scale > 1) {
+            reset();
+          } else {
+            setScale(2);
+          }
+        }}
+      >
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="max-h-[82vh] max-w-[96vw] select-none object-contain will-change-transform"
+          style={{
+            transform:
+              `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
+
+            transformOrigin:
+              'center center',
+          }}
+        />
+      </div>
+
+      <div className="flex shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-slate-950/90 px-4 py-3 [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)]">
+        <button
+          type="button"
+          onClick={() => {
+            setScale((current) =>
+              clampScale(
+                current - 0.5,
+              ),
+            );
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 active:scale-95"
+          aria-label="Herauszoomen"
+        >
+          <ZoomOut size={20} />
+        </button>
+
+        <button
+          type="button"
+          onClick={reset}
+          className="flex h-11 min-w-28 items-center justify-center gap-2 rounded-full bg-white/10 px-4 text-xs font-bold active:scale-95"
+        >
+          <RotateCcw size={17} />
+          Zurücksetzen
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setScale((current) =>
+              clampScale(
+                current + 0.5,
+              ),
+            );
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 active:scale-95"
+          aria-label="Hineinzoomen"
+        >
+          <ZoomIn size={20} />
+        </button>
+      </div>
+    </div>
   );
 }
 

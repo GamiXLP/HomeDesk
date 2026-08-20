@@ -3,6 +3,7 @@ import {
   MediaTypeSelection,
 } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem } from '@capacitor/filesystem';
 
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
@@ -10,26 +11,75 @@ const ALLOWED_TYPES = new Set([
   'image/webp',
 ]);
 
-function mimeFromResult(
-  format?: string,
-  responseContentType?: string | null,
-) {
-  const responseType =
-    responseContentType
-      ?.split(';')[0]
-      ?.trim()
-      ?.toLowerCase();
+function base64ToBytes(value: string) {
+  const base64 = value.includes(',')
+    ? value.slice(value.indexOf(',') + 1)
+    : value;
 
-  if (
-    responseType &&
-    ALLOWED_TYPES.has(responseType)
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (
+    let index = 0;
+    index < binary.length;
+    index += 1
   ) {
-    return responseType;
+    bytes[index] =
+      binary.charCodeAt(index);
   }
 
-  switch (format?.toLowerCase()) {
-    case 'jpg':
+  return bytes;
+}
+
+function detectImageType(
+  bytes: Uint8Array,
+  declaredFormat?: string,
+) {
+  // JPEG: FF D8 FF
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  ) {
+    return 'image/jpeg';
+  }
+
+  // PNG
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  // WEBP = RIFF .... WEBP
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  switch (
+    declaredFormat?.toLowerCase()
+  ) {
     case 'jpeg':
+    case 'jpg':
       return 'image/jpeg';
 
     case 'png':
@@ -39,12 +89,13 @@ function mimeFromResult(
       return 'image/webp';
 
     default:
-      // Android liefert Galerie-Fotos normalerweise als JPEG.
-      return 'image/jpeg';
+      return null;
   }
 }
 
-function extensionForMime(mime: string) {
+function extensionForMime(
+  mime: string,
+) {
   switch (mime) {
     case 'image/png':
       return 'png';
@@ -68,15 +119,21 @@ export async function pickNativeCommentImages(
   try {
     const { results } =
       await Camera.chooseFromGallery({
-        mediaType: MediaTypeSelection.Photo,
-        allowMultipleSelection: limit > 1,
+        mediaType:
+          MediaTypeSelection.Photo,
+
+        allowMultipleSelection:
+          limit > 1,
+
         limit,
+
         includeMetadata: true,
 
-        // Große Handyfotos werden direkt etwas verkleinert.
         quality: 88,
+
         targetWidth: 2048,
         targetHeight: 2048,
+
         correctOrientation: true,
       });
 
@@ -89,35 +146,40 @@ export async function pickNativeCommentImages(
     ) {
       const result = results[index];
 
-      if (!result.webPath) {
+      if (!result.uri) {
         throw new Error(
-          'Das ausgewählte Bild konnte nicht gelesen werden.',
+          'Das ausgewählte Bild besitzt keinen lesbaren Dateipfad.',
         );
       }
 
-      const response = await fetch(
-        result.webPath,
-      );
+      /*
+       * Capacitor empfiehlt für vollständige
+       * native Bilddaten die URI über das
+       * Filesystem einzulesen.
+       */
+      const fileResult =
+        await Filesystem.readFile({
+          path: result.uri,
+        });
 
-      if (!response.ok) {
-        throw new Error(
-          'Das ausgewählte Bild konnte nicht vom Gerät geladen werden.',
+      let bytes: Uint8Array;
+
+      if (
+        typeof fileResult.data ===
+        'string'
+      ) {
+        bytes = base64ToBytes(
+          fileResult.data,
+        );
+      } else {
+        bytes = new Uint8Array(
+          await fileResult.data.arrayBuffer(),
         );
       }
 
-      const bytes =
-        await response.arrayBuffer();
-
-      const mime = mimeFromResult(
-        result.metadata?.format,
-        response.headers.get(
-          'content-type',
-        ),
-      );
-
-      if (!ALLOWED_TYPES.has(mime)) {
+      if (bytes.byteLength === 0) {
         throw new Error(
-          'Dieses Bildformat wird nicht unterstützt.',
+          'Das ausgewählte Bild enthält keine Bilddaten.',
         );
       }
 
@@ -126,20 +188,40 @@ export async function pickNativeCommentImages(
         maxSizeBytes
       ) {
         throw new Error(
-          'Das ausgewählte Bild ist auch nach der Optimierung größer als 5 MB.',
+          'Das ausgewählte Bild ist größer als 5 MB.',
+        );
+      }
+
+      const mime =
+        detectImageType(
+          bytes,
+          result.metadata?.format,
+        );
+
+      if (
+        !mime ||
+        !ALLOWED_TYPES.has(mime)
+      ) {
+        throw new Error(
+          'Das Bildformat konnte nicht sicher erkannt werden.',
         );
       }
 
       const extension =
         extensionForMime(mime);
 
-      const fileName =
+      const name =
         `homedesk-${Date.now()}-${index + 1}.${extension}`;
+
+      const fileBuffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
 
       files.push(
         new File(
-          [bytes],
-          fileName,
+          [fileBuffer],
+          name,
           {
             type: mime,
             lastModified: Date.now(),
@@ -156,7 +238,6 @@ export async function pickNativeCommentImages(
         message?: string;
       };
 
-    // Nutzer hat den Picker einfach geschlossen.
     if (
       nativeError.code ===
         'OS-PLUG-CAMR-0020' ||
