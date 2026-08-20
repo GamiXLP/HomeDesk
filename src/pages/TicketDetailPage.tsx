@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -35,7 +36,6 @@ import {
   COMMENT_IMAGE_MAX_SIZE_BYTES,
   COMMENT_IMAGE_MIME_TYPES,
   deleteTicketAdmin,
-  downloadTicketAttachment,
   getComments,
   getProfiles,
   getTicket,
@@ -606,94 +606,34 @@ function CommentAttachmentPreview({
 }: {
   attachment: TicketAttachment;
 }) {
-  const [imageUrl, setImageUrl] =
-    useState<string | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [loadError, setLoadError] =
-    useState<string | null>(null);
-
   const [viewerOpen, setViewerOpen] =
     useState(false);
 
-  useEffect(() => {
-    let disposed = false;
-    let objectUrl: string | null = null;
+  const [imageFailed, setImageFailed] =
+    useState(false);
 
-    setLoading(true);
-    setLoadError(null);
-
-    void downloadTicketAttachment(
-      attachment.file_path,
-    )
-      .then((blob: Blob) => {
-        if (disposed) {
-          return;
-        }
-
-        objectUrl =
-          URL.createObjectURL(blob);
-
-        setImageUrl(objectUrl);
-      })
-      .catch((error: unknown) => {
-        if (disposed) {
-          return;
-        }
-
-        console.error(
-          'Attachment could not be loaded:',
-          error,
-        );
-
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Bild konnte nicht geladen werden.',
-        );
-      })
-      .finally(() => {
-        if (!disposed) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      disposed = true;
-
-      if (objectUrl) {
-        URL.revokeObjectURL(
-          objectUrl,
-        );
-      }
-    };
-  }, [attachment.file_path]);
-
-  if (loading) {
-    return (
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-        <div className="h-40 animate-pulse bg-slate-200 dark:bg-slate-700" />
-
-        <div className="p-3">
-          <div className="h-3 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-        </div>
-      </div>
-    );
-  }
+  /*
+   * getComments() erzeugt bereits für jeden
+   * privaten Supabase-Anhang eine Signed URL.
+   *
+   * Die nutzen wir DIREKT.
+   * Kein Blob/ObjectURL/Filesystem mehr.
+   */
+  const imageUrl =
+    attachment.signed_url ??
+    null;
 
   if (
-    loadError ||
-    !imageUrl
+    !imageUrl ||
+    imageFailed
   ) {
     return (
-      <div className="rounded-2xl border border-red-100 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-        <div className="flex items-center gap-2 text-red-600 dark:text-red-300">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
           <ImagePlus size={18} />
 
           <p className="text-xs font-bold">
-            Bild konnte nicht geladen werden
+            Bild nicht darstellbar
           </p>
         </div>
 
@@ -701,11 +641,11 @@ function CommentAttachmentPreview({
           {attachment.file_name}
         </p>
 
-        {loadError && (
-          <p className="mt-1 text-[10px] text-red-500">
-            {loadError}
-          </p>
-        )}
+        <p className="mt-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+          Dieses Bild wurde vermutlich mit einer
+          älteren fehlerhaften Android-Version
+          hochgeladen. Bitte hänge es erneut an.
+        </p>
       </div>
     );
   }
@@ -726,6 +666,9 @@ function CommentAttachmentPreview({
             className="h-44 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
             loading="lazy"
             decoding="async"
+            onError={() =>
+              setImageFailed(true)
+            }
           />
 
           <div className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-lg backdrop-blur">
@@ -741,23 +684,29 @@ function CommentAttachmentPreview({
           <p className="mt-0.5 text-[10px] text-slate-400">
             {formatFileSize(
               attachment.file_size,
-            )} · Antippen zum Vergrößern
+            )}{' '}
+            · Antippen zum Vergrößern
           </p>
         </div>
       </button>
 
-      {viewerOpen && (
-        <ImageLightbox
-          src={imageUrl}
-          alt={attachment.file_name}
-          onClose={() =>
-            setViewerOpen(false)
-          }
-        />
-      )}
+      {viewerOpen &&
+        createPortal(
+          <ImageLightbox
+            src={imageUrl}
+            alt={
+              attachment.file_name
+            }
+            onClose={() =>
+              setViewerOpen(false)
+            }
+          />,
+          document.body,
+        )}
     </>
   );
 }
+
 
 function ImageLightbox({
   src,
@@ -777,29 +726,34 @@ function ImageLightbox({
       y: 0,
     });
 
-  const pointers = useRef(
-    new Map<
-      number,
-      {
-        x: number;
-        y: number;
-      }
-    >(),
-  );
+  const pointers =
+    useRef(
+      new Map<
+        number,
+        {
+          x: number;
+          y: number;
+        }
+      >(),
+    );
 
-  const gesture = useRef({
-    initialDistance: 0,
-    initialScale: 1,
-    lastX: 0,
-    lastY: 0,
-  });
+  const gesture =
+    useRef({
+      initialDistance: 0,
+      initialScale: 1,
+      lastX: 0,
+      lastY: 0,
+    });
 
   const clampScale = (
     value: number,
   ) =>
     Math.min(
       5,
-      Math.max(1, value),
+      Math.max(
+        1,
+        value,
+      ),
     );
 
   const reset = () => {
@@ -813,31 +767,36 @@ function ImageLightbox({
 
   useEffect(() => {
     const previousOverflow =
-      document.body.style.overflow;
+      document.body.style
+        .overflow;
 
-    document.body.style.overflow =
-      'hidden';
+    document.body.style
+      .overflow = 'hidden';
 
     const handleKeyDown = (
       event: KeyboardEvent,
     ) => {
-      if (event.key === 'Escape') {
+      if (
+        event.key === 'Escape'
+      ) {
         onClose();
       }
 
       if (event.key === '+') {
-        setScale((current) =>
-          clampScale(
-            current + 0.5,
-          ),
+        setScale(
+          (current) =>
+            clampScale(
+              current + 0.5,
+            ),
         );
       }
 
       if (event.key === '-') {
-        setScale((current) =>
-          clampScale(
-            current - 0.5,
-          ),
+        setScale(
+          (current) =>
+            clampScale(
+              current - 0.5,
+            ),
         );
       }
     };
@@ -848,7 +807,8 @@ function ImageLightbox({
     );
 
     return () => {
-      document.body.style.overflow =
+      document.body.style
+        .overflow =
         previousOverflow;
 
       window.removeEventListener(
@@ -858,21 +818,28 @@ function ImageLightbox({
     };
   }, [onClose]);
 
-  const pointerDistance = () => {
-    const values =
-      Array.from(
-        pointers.current.values(),
+  const pointerDistance =
+    () => {
+      const values =
+        Array.from(
+          pointers.current
+            .values(),
+        );
+
+      if (
+        values.length < 2
+      ) {
+        return 0;
+      }
+
+      return Math.hypot(
+        values[0].x -
+          values[1].x,
+
+        values[0].y -
+          values[1].y,
       );
-
-    if (values.length < 2) {
-      return 0;
-    }
-
-    return Math.hypot(
-      values[0].x - values[1].x,
-      values[0].y - values[1].y,
-    );
-  };
+    };
 
   const handlePointerDown = (
     event:
@@ -892,12 +859,15 @@ function ImageLightbox({
     );
 
     if (
-      pointers.current.size === 2
+      pointers.current
+        .size === 2
     ) {
-      gesture.current.initialDistance =
+      gesture.current
+        .initialDistance =
         pointerDistance();
 
-      gesture.current.initialScale =
+      gesture.current
+        .initialScale =
         scale;
     } else {
       gesture.current.lastX =
@@ -928,8 +898,13 @@ function ImageLightbox({
       },
     );
 
+    /*
+     * Zwei Finger:
+     * Pinch Zoom
+     */
     if (
-      pointers.current.size >= 2
+      pointers.current
+        .size >= 2
     ) {
       const distance =
         pointerDistance();
@@ -954,6 +929,10 @@ function ImageLightbox({
       return;
     }
 
+    /*
+     * Ein Finger:
+     * bei Zoom verschieben
+     */
     if (scale <= 1) {
       return;
     }
@@ -972,10 +951,17 @@ function ImageLightbox({
     gesture.current.lastY =
       event.clientY;
 
-    setOffset((current) => ({
-      x: current.x + deltaX,
-      y: current.y + deltaY,
-    }));
+    setOffset(
+      (current) => ({
+        x:
+          current.x +
+          deltaX,
+
+        y:
+          current.y +
+          deltaY,
+      }),
+    );
   };
 
   const releasePointer = (
@@ -1002,28 +988,38 @@ function ImageLightbox({
     }
   };
 
+  /*
+   * createPortal() hängt diesen
+   * Viewer direkt an document.body.
+   *
+   * Dadurch liegt er garantiert über
+   * Bottom-Navigation und Ticketkarten.
+   */
   return (
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-slate-950/98 text-white"
+      className="fixed inset-0 z-[9999] flex flex-col bg-slate-950 text-white"
       role="dialog"
       aria-modal="true"
       aria-label={alt}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3 [padding-top:calc(env(safe-area-inset-top)+0.75rem)]">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-slate-950 px-4 py-3 [padding-top:calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold">
             {alt}
           </p>
 
           <p className="mt-0.5 text-[10px] text-slate-400">
-            {Math.round(scale * 100)} %
+            {Math.round(
+              scale * 100,
+            )}{' '}
+            %
           </p>
         </div>
 
         <button
           type="button"
           onClick={onClose}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 transition active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 active:scale-95"
           aria-label="Bild schließen"
         >
           <X size={22} />
@@ -1044,20 +1040,6 @@ function ImageLightbox({
         onPointerCancel={
           releasePointer
         }
-        onWheel={(event) => {
-          event.preventDefault();
-
-          setScale((current) =>
-            clampScale(
-              current +
-                (
-                  event.deltaY < 0
-                    ? 0.25
-                    : -0.25
-                ),
-            ),
-          );
-        }}
         onDoubleClick={() => {
           if (scale > 1) {
             reset();
@@ -1070,7 +1052,7 @@ function ImageLightbox({
           src={src}
           alt={alt}
           draggable={false}
-          className="max-h-[82vh] max-w-[96vw] select-none object-contain will-change-transform"
+          className="max-h-full max-w-full select-none object-contain will-change-transform"
           style={{
             transform:
               `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
@@ -1081,16 +1063,18 @@ function ImageLightbox({
         />
       </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-slate-950/90 px-4 py-3 [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)]">
+      <div className="flex shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-slate-950 px-4 py-3 [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)]">
         <button
           type="button"
-          onClick={() => {
-            setScale((current) =>
-              clampScale(
-                current - 0.5,
-              ),
-            );
-          }}
+          onClick={() =>
+            setScale(
+              (current) =>
+                clampScale(
+                  current -
+                    0.5,
+                ),
+            )
+          }
           className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 active:scale-95"
           aria-label="Herauszoomen"
         >
@@ -1102,19 +1086,24 @@ function ImageLightbox({
           onClick={reset}
           className="flex h-11 min-w-28 items-center justify-center gap-2 rounded-full bg-white/10 px-4 text-xs font-bold active:scale-95"
         >
-          <RotateCcw size={17} />
+          <RotateCcw
+            size={17}
+          />
+
           Zurücksetzen
         </button>
 
         <button
           type="button"
-          onClick={() => {
-            setScale((current) =>
-              clampScale(
-                current + 0.5,
-              ),
-            );
-          }}
+          onClick={() =>
+            setScale(
+              (current) =>
+                clampScale(
+                  current +
+                    0.5,
+                ),
+            )
+          }
           className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 active:scale-95"
           aria-label="Hineinzoomen"
         >
@@ -1124,6 +1113,7 @@ function ImageLightbox({
     </div>
   );
 }
+
 
 function EventRow({ event, last }: { event: TicketEvent; last: boolean }) {
   const description = describeEvent(event);

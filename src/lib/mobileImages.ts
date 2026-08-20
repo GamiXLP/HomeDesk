@@ -3,139 +3,251 @@ import {
   MediaTypeSelection,
 } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-import { Filesystem } from '@capacitor/filesystem';
 
-const ALLOWED_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const OUTPUT_MIME = 'image/jpeg';
+const OUTPUT_EXTENSION = 'jpg';
+const OUTPUT_QUALITY = 0.88;
+const MAX_DIMENSION = 2048;
 
-function base64ToBytes(value: string) {
-  const base64 = value.includes(',')
-    ? value.slice(value.indexOf(',') + 1)
-    : value;
+function loadImage(
+  src: string,
+): Promise<HTMLImageElement> {
+  return new Promise(
+    (resolve, reject) => {
+      const image = new Image();
 
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
+      image.onload = () => {
+        resolve(image);
+      };
 
-  for (
-    let index = 0;
-    index < binary.length;
-    index += 1
-  ) {
-    bytes[index] =
-      binary.charCodeAt(index);
-  }
+      image.onerror = () => {
+        reject(
+          new Error(
+            'Das ausgewählte Bild konnte nicht decodiert werden.',
+          ),
+        );
+      };
 
-  return bytes;
+      image.src = src;
+    },
+  );
 }
 
-function detectImageType(
-  bytes: Uint8Array,
-  declaredFormat?: string,
-) {
-  // JPEG: FF D8 FF
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  ) {
-    return 'image/jpeg';
-  }
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+): Promise<Blob> {
+  return new Promise(
+    (resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(
+              new Error(
+                'Das Bild konnte nicht in JPEG umgewandelt werden.',
+              ),
+            );
 
-  // PNG
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return 'image/png';
-  }
+            return;
+          }
 
-  // WEBP = RIFF .... WEBP
-  if (
-    bytes.length >= 12 &&
-    bytes[0] === 0x52 &&
-    bytes[1] === 0x49 &&
-    bytes[2] === 0x46 &&
-    bytes[3] === 0x46 &&
-    bytes[8] === 0x57 &&
-    bytes[9] === 0x45 &&
-    bytes[10] === 0x42 &&
-    bytes[11] === 0x50
-  ) {
-    return 'image/webp';
-  }
-
-  switch (
-    declaredFormat?.toLowerCase()
-  ) {
-    case 'jpeg':
-    case 'jpg':
-      return 'image/jpeg';
-
-    case 'png':
-      return 'image/png';
-
-    case 'webp':
-      return 'image/webp';
-
-    default:
-      return null;
-  }
+          resolve(blob);
+        },
+        OUTPUT_MIME,
+        OUTPUT_QUALITY,
+      );
+    },
+  );
 }
 
-function extensionForMime(
-  mime: string,
-) {
-  switch (mime) {
-    case 'image/png':
-      return 'png';
+async function normalizeNativeImage(
+  webPath: string,
+  fileName: string,
+  maxSizeBytes: number,
+): Promise<File> {
+  /*
+   * WICHTIG:
+   * Capacitor garantiert, dass webPath für
+   * <img src="..."> gedacht ist.
+   *
+   * Wir lassen die WebView das native Bild also
+   * zuerst wirklich decodieren.
+   */
+  const image =
+    await loadImage(webPath);
 
-    case 'image/webp':
-      return 'webp';
+  const sourceWidth =
+    image.naturalWidth;
 
-    default:
-      return 'jpg';
+  const sourceHeight =
+    image.naturalHeight;
+
+  if (
+    !sourceWidth ||
+    !sourceHeight
+  ) {
+    throw new Error(
+      'Das ausgewählte Bild hat keine gültige Auflösung.',
+    );
   }
+
+  const ratio =
+    Math.min(
+      1,
+      MAX_DIMENSION /
+        Math.max(
+          sourceWidth,
+          sourceHeight,
+        ),
+    );
+
+  const width =
+    Math.max(
+      1,
+      Math.round(
+        sourceWidth * ratio,
+      ),
+    );
+
+  const height =
+    Math.max(
+      1,
+      Math.round(
+        sourceHeight * ratio,
+      ),
+    );
+
+  const canvas =
+    document.createElement(
+      'canvas',
+    );
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const context =
+    canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error(
+      'Die Bildverarbeitung wird auf diesem Gerät nicht unterstützt.',
+    );
+  }
+
+  /*
+   * Weißer Hintergrund:
+   * Falls PNG/WebP transparent ist,
+   * entstehen beim JPEG keine schwarzen Flächen.
+   */
+  context.fillStyle = '#ffffff';
+
+  context.fillRect(
+    0,
+    0,
+    width,
+    height,
+  );
+
+  context.drawImage(
+    image,
+    0,
+    0,
+    width,
+    height,
+  );
+
+  /*
+   * Ab hier existiert kein Android-Sonderformat
+   * mehr. Das Ergebnis ist ein normales JPEG,
+   * das von unserer WebView selbst erzeugt wurde.
+   */
+  const blob =
+    await canvasToBlob(
+      canvas,
+    );
+
+  if (blob.size === 0) {
+    throw new Error(
+      'Das verarbeitete Bild enthält keine Daten.',
+    );
+  }
+
+  if (
+    blob.size >
+    maxSizeBytes
+  ) {
+    throw new Error(
+      'Das verarbeitete Bild ist größer als 5 MB.',
+    );
+  }
+
+  /*
+   * Vor dem Upload nochmals testen:
+   * Kann HomeDesk sein eigenes Ergebnis anzeigen?
+   *
+   * Wenn nicht -> kein Upload.
+   */
+  const verificationUrl =
+    URL.createObjectURL(
+      blob,
+    );
+
+  try {
+    await loadImage(
+      verificationUrl,
+    );
+  } finally {
+    URL.revokeObjectURL(
+      verificationUrl,
+    );
+  }
+
+  return new File(
+    [blob],
+    fileName,
+    {
+      type: OUTPUT_MIME,
+      lastModified: Date.now(),
+    },
+  );
 }
 
 export async function pickNativeCommentImages(
   limit: number,
   maxSizeBytes: number,
 ): Promise<File[] | null> {
-  if (!Capacitor.isNativePlatform()) {
+  if (
+    !Capacitor.isNativePlatform()
+  ) {
     return null;
   }
 
   try {
-    const { results } =
-      await Camera.chooseFromGallery({
-        mediaType:
-          MediaTypeSelection.Photo,
+    const {
+      results,
+    } =
+      await Camera.chooseFromGallery(
+        {
+          mediaType:
+            MediaTypeSelection.Photo,
 
-        allowMultipleSelection:
-          limit > 1,
+          allowMultipleSelection:
+            limit > 1,
 
-        limit,
+          limit,
 
-        includeMetadata: true,
+          includeMetadata: true,
 
-        quality: 88,
+          quality: 90,
 
-        targetWidth: 2048,
-        targetHeight: 2048,
+          targetWidth:
+            MAX_DIMENSION,
 
-        correctOrientation: true,
-      });
+          targetHeight:
+            MAX_DIMENSION,
+
+          correctOrientation: true,
+        },
+      );
 
     const files: File[] = [];
 
@@ -144,90 +256,26 @@ export async function pickNativeCommentImages(
       index < results.length;
       index += 1
     ) {
-      const result = results[index];
+      const result =
+        results[index];
 
-      if (!result.uri) {
+      if (!result.webPath) {
         throw new Error(
-          'Das ausgewählte Bild besitzt keinen lesbaren Dateipfad.',
+          'Das ausgewählte Bild besitzt keinen darstellbaren Pfad.',
         );
       }
-
-      /*
-       * Capacitor empfiehlt für vollständige
-       * native Bilddaten die URI über das
-       * Filesystem einzulesen.
-       */
-      const fileResult =
-        await Filesystem.readFile({
-          path: result.uri,
-        });
-
-      let bytes: Uint8Array;
-
-      if (
-        typeof fileResult.data ===
-        'string'
-      ) {
-        bytes = base64ToBytes(
-          fileResult.data,
-        );
-      } else {
-        bytes = new Uint8Array(
-          await fileResult.data.arrayBuffer(),
-        );
-      }
-
-      if (bytes.byteLength === 0) {
-        throw new Error(
-          'Das ausgewählte Bild enthält keine Bilddaten.',
-        );
-      }
-
-      if (
-        bytes.byteLength >
-        maxSizeBytes
-      ) {
-        throw new Error(
-          'Das ausgewählte Bild ist größer als 5 MB.',
-        );
-      }
-
-      const mime =
-        detectImageType(
-          bytes,
-          result.metadata?.format,
-        );
-
-      if (
-        !mime ||
-        !ALLOWED_TYPES.has(mime)
-      ) {
-        throw new Error(
-          'Das Bildformat konnte nicht sicher erkannt werden.',
-        );
-      }
-
-      const extension =
-        extensionForMime(mime);
 
       const name =
-        `homedesk-${Date.now()}-${index + 1}.${extension}`;
+        `homedesk-${Date.now()}-${index + 1}.${OUTPUT_EXTENSION}`;
 
-      const fileBuffer = bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
-
-      files.push(
-        new File(
-          [fileBuffer],
+      const file =
+        await normalizeNativeImage(
+          result.webPath,
           name,
-          {
-            type: mime,
-            lastModified: Date.now(),
-          },
-        ),
-      );
+          maxSizeBytes,
+        );
+
+      files.push(file);
     }
 
     return files;
@@ -242,7 +290,8 @@ export async function pickNativeCommentImages(
       nativeError.code ===
         'OS-PLUG-CAMR-0020' ||
       /cancel/i.test(
-        nativeError.message || '',
+        nativeError.message ||
+          '',
       )
     ) {
       return [];
@@ -261,11 +310,13 @@ export function imagePickerErrorMessage(
       message?: string;
     };
 
-  if (nativeError?.message) {
+  if (
+    nativeError?.message
+  ) {
     return nativeError.code
       ? `${nativeError.message} (${nativeError.code})`
       : nativeError.message;
   }
 
-  return 'Das Bild konnte nicht ausgewählt oder gelesen werden.';
+  return 'Das Bild konnte nicht ausgewählt oder verarbeitet werden.';
 }
