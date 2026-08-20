@@ -238,16 +238,65 @@ async function uploadCommentImages(ticketId: string, commentId: string, uploaded
   try {
     await Promise.all(
       plannedUploads.map(async ({ file, filePath }) => {
-        const { error: uploadError } = await supabase.storage
-          .from(TICKET_ATTACHMENTS_BUCKET)
-          .upload(filePath, file, {
-            contentType: file.type,
-            cacheControl: '3600',
-            upsert: false,
-          });
+        let fileBody: ArrayBuffer;
 
-        if (uploadError) throw uploadError;
-        uploadedFilePaths.push(filePath);
+        try {
+          // Wichtig für Android/Capacitor:
+          // Nicht das native File direkt an Supabase geben.
+          fileBody = await file.arrayBuffer();
+        } catch (readError) {
+          console.error(
+            'Attachment could not be read:',
+            readError,
+          );
+
+          throw new Error(
+            `"${file.name}" konnte auf diesem Gerät nicht gelesen werden.`,
+          );
+        }
+
+        const { error: uploadError } =
+          await supabase.storage
+            .from(TICKET_ATTACHMENTS_BUCKET)
+            .upload(
+              filePath,
+              fileBody,
+              {
+                contentType: file.type,
+                cacheControl: '3600',
+                upsert: false,
+              },
+            );
+
+        if (uploadError) {
+          console.error(
+            'Attachment upload failed:',
+            uploadError,
+          );
+
+          const rawMessage =
+            typeof uploadError.message ===
+            'string'
+              ? uploadError.message
+              : '';
+
+          const browserEventError =
+            rawMessage.includes(
+              '"isTrusted"',
+            ) ||
+            rawMessage ===
+              '[object Object]';
+
+          throw new Error(
+            browserEventError
+              ? `"${file.name}" konnte von der Android-App nicht hochgeladen werden. Bitte versuche es erneut.`
+              : `Upload von "${file.name}" fehlgeschlagen: ${rawMessage || 'Unbekannter Speicherfehler'}`,
+          );
+        }
+
+        uploadedFilePaths.push(
+          filePath,
+        );
       }),
     );
 

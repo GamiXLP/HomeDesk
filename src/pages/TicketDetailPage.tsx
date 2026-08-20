@@ -17,7 +17,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -40,6 +40,10 @@ import {
   updateTicketAdmin,
 } from '../lib/tickets';
 import { supabase } from '../lib/supabase';
+import {
+  imagePickerErrorMessage,
+  pickNativeCommentImages,
+} from '../lib/mobileImages';
 import {
   areas,
   categories,
@@ -133,13 +137,6 @@ export function TicketDetailPage() {
     };
   }, [ticket?.id, reload]);
 
-  const previewFiles = useMemo(
-    () => selectedFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
-    [selectedFiles],
-  );
-
-  useEffect(() => () => previewFiles.forEach((item) => URL.revokeObjectURL(item.url)), [previewFiles]);
-
   async function adminPatch(
     patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to'>>,
   ) {
@@ -158,36 +155,112 @@ export function TicketDetailPage() {
     }
   }
 
-  function handleFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length === 0) return;
+  function appendSelectedImages(files: File[]) {
+  if (files.length === 0) {
+    return;
+  }
 
-    const nextFiles = [...selectedFiles, ...files];
-    if (nextFiles.length > COMMENT_IMAGE_MAX_COUNT) {
-      setCommentError(`Maximal ${COMMENT_IMAGE_MAX_COUNT} Bilder pro Kommentar erlaubt.`);
-      event.target.value = '';
+  const nextFiles = [
+    ...selectedFiles,
+    ...files,
+  ];
+
+  if (
+    nextFiles.length >
+    COMMENT_IMAGE_MAX_COUNT
+  ) {
+    setCommentError(
+      `Maximal ${COMMENT_IMAGE_MAX_COUNT} Bilder pro Kommentar erlaubt.`,
+    );
+
+    return;
+  }
+
+  for (const file of files) {
+    if (
+      !COMMENT_IMAGE_MIME_TYPES.includes(
+        file.type,
+      )
+    ) {
+      setCommentError(
+        `"${file.name}" ist kein erlaubtes Bildformat. Erlaubt sind JPG, PNG und WEBP.`,
+      );
+
       return;
     }
 
-    for (const file of files) {
-      if (!COMMENT_IMAGE_MIME_TYPES.includes(file.type)) {
-        setCommentError(`"${file.name}" ist kein erlaubtes Bildformat. Erlaubt sind JPG, PNG und WEBP.`);
-        event.target.value = '';
-        return;
-      }
-      if (file.size > COMMENT_IMAGE_MAX_SIZE_BYTES) {
-        setCommentError(`"${file.name}" ist zu groß. Maximal erlaubt sind 5 MB pro Bild.`);
-        event.target.value = '';
-        return;
-      }
-    }
+    if (
+      file.size >
+      COMMENT_IMAGE_MAX_SIZE_BYTES
+    ) {
+      setCommentError(
+        `"${file.name}" ist zu groß. Maximal erlaubt sind 5 MB pro Bild.`,
+      );
 
-    setCommentError(null);
-    setSelectedFiles(nextFiles);
-    event.target.value = '';
+      return;
+    }
   }
 
-  async function submitComment(event: React.FormEvent) {
+  setCommentError(null);
+  setSelectedFiles(nextFiles);
+}
+
+function handleFileSelection(
+  event: React.ChangeEvent<HTMLInputElement>,
+) {
+  const files =
+    Array.from(
+      event.target.files ?? [],
+    );
+
+  appendSelectedImages(files);
+
+  event.target.value = '';
+}
+
+async function openImagePicker() {
+  if (
+    selectedFiles.length >=
+    COMMENT_IMAGE_MAX_COUNT
+  ) {
+    return;
+  }
+
+  const remaining =
+    COMMENT_IMAGE_MAX_COUNT -
+    selectedFiles.length;
+
+  try {
+    setCommentError(null);
+
+    const nativeFiles =
+      await pickNativeCommentImages(
+        remaining,
+        COMMENT_IMAGE_MAX_SIZE_BYTES,
+      );
+
+    // null = normale Webversion.
+    if (nativeFiles === null) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    appendSelectedImages(
+      nativeFiles,
+    );
+  } catch (error) {
+    console.error(
+      'Image picker failed:',
+      error,
+    );
+
+    setCommentError(
+      imagePickerErrorMessage(error),
+    );
+  }
+}
+
+async function submitComment(event: React.FormEvent) {
     event.preventDefault();
     if (!ticket || !user || isSubmittingComment) return;
 
@@ -306,23 +379,31 @@ export function TicketDetailPage() {
             <form onSubmit={submitComment} className="mt-5 rounded-[24px] bg-slate-50 p-3.5 dark:bg-slate-950/50 sm:mt-6 sm:rounded-3xl sm:p-5">
               <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Antwort schreiben …" className="min-h-24 w-full resize-y border-0 bg-transparent p-0 text-sm leading-6 outline-none focus:ring-0 dark:bg-transparent sm:min-h-28" />
 
-              {previewFiles.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                  {previewFiles.map(({ file, url }, index) => (
-                    <div key={`${file.name}-${index}`} className="group relative overflow-hidden rounded-2xl bg-slate-200 dark:bg-slate-800">
-                      <img src={url} alt={file.name} className="h-28 w-full object-cover" />
-                      <button type="button" onClick={() => setSelectedFiles((files) => files.filter((_, fileIndex) => fileIndex !== index))} className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-white opacity-90 transition hover:bg-red-500"><X size={14} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {selectedFiles.length > 0 && (
+<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+{selectedFiles.map((file, index) => (
+<LocalImagePreview
+  key={`${file.name}-${file.lastModified}-${index}`}
+  file={file}
+  onRemove={() =>
+    setSelectedFiles((files) =>
+      files.filter(
+        (_, fileIndex) =>
+          fileIndex !== index,
+      ),
+    )
+  }
+/>
+))}
+</div>
+)}
 
-              {commentError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">{commentError}</p>}
+{commentError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-300">{commentError}</p>}
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
                 <div className="flex flex-wrap items-center gap-2">
                   <input ref={fileInputRef} type="file" accept={COMMENT_IMAGE_MIME_TYPES.join(',')} multiple onChange={handleFileSelection} className="hidden" />
-                  <Button type="button" variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} disabled={selectedFiles.length >= COMMENT_IMAGE_MAX_COUNT}>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void openImagePicker()} disabled={selectedFiles.length >= COMMENT_IMAGE_MAX_COUNT}>
                     <ImagePlus size={15} /> Bild
                   </Button>
                   {isAdmin && (
@@ -400,6 +481,106 @@ export function TicketDetailPage() {
           </aside>
         )}
       </div>
+    </div>
+  );
+}
+
+function LocalImagePreview({
+  file,
+  onRemove,
+}: {
+  file: File;
+  onRemove: () => void;
+}) {
+  const [src, setSrc] =
+    useState<string | null>(null);
+
+  const [previewFailed, setPreviewFailed] =
+    useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const reader =
+      new FileReader();
+
+    reader.onload = () => {
+      if (
+        active &&
+        typeof reader.result === 'string'
+      ) {
+        setSrc(reader.result);
+        setPreviewFailed(false);
+      }
+    };
+
+    reader.onerror = () => {
+      if (!active) {
+        return;
+      }
+
+      setSrc(null);
+      setPreviewFailed(true);
+    };
+
+    reader.onabort = () => {
+      if (!active) {
+        return;
+      }
+
+      setSrc(null);
+      setPreviewFailed(true);
+    };
+
+    try {
+      reader.readAsDataURL(file);
+    } catch {
+      setPreviewFailed(true);
+    }
+
+    return () => {
+      active = false;
+
+      if (
+        reader.readyState ===
+        FileReader.LOADING
+      ) {
+        reader.abort();
+      }
+    };
+  }, [file]);
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl bg-slate-200 dark:bg-slate-800">
+      {src && !previewFailed ? (
+        <img
+          src={src}
+          alt={file.name}
+          className="h-28 w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-28 flex-col items-center justify-center px-3 text-center">
+          <ImagePlus
+            size={22}
+            className="text-slate-400"
+          />
+
+          <p className="mt-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            {previewFailed
+              ? 'Vorschau nicht möglich'
+              : 'Bild wird geladen …'}
+          </p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`${file.name} entfernen`}
+        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-white opacity-90 transition hover:bg-red-500"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }
