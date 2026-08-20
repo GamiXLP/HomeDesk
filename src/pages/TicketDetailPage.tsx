@@ -36,6 +36,7 @@ import {
   COMMENT_IMAGE_MAX_SIZE_BYTES,
   COMMENT_IMAGE_MIME_TYPES,
   deleteTicketAdmin,
+  downloadTicketAttachment,
   getComments,
   getProfiles,
   getTicket,
@@ -609,43 +610,151 @@ function CommentAttachmentPreview({
   const [viewerOpen, setViewerOpen] =
     useState(false);
 
-  const [imageFailed, setImageFailed] =
-    useState(false);
+  const [imageUrl, setImageUrl] =
+    useState<string | null>(null);
 
-  /*
-   * getComments() erzeugt bereits für jeden
-   * privaten Supabase-Anhang eine Signed URL.
-   *
-   * Die nutzen wir DIREKT.
-   * Kein Blob/ObjectURL/Filesystem mehr.
-   */
-  const imageUrl =
-    attachment.signed_url ??
-    null;
+  const [loading, setLoading] =
+    useState(true);
+
+  const [loadError, setLoadError] =
+    useState<string | null>(null);
+
+  const [retryKey, setRetryKey] =
+    useState(0);
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl: string | null =
+      null;
+
+    setLoading(true);
+    setLoadError(null);
+    setImageUrl(null);
+
+    void downloadTicketAttachment(
+      attachment.file_path,
+    )
+      .then((blob: Blob) => {
+        if (disposed) {
+          return;
+        }
+
+        if (
+          blob.size === 0
+        ) {
+          throw new Error(
+            'Die gespeicherte Bilddatei ist leer.',
+          );
+        }
+
+        /*
+         * Der Download läuft authentifiziert über
+         * die bestehende Supabase-Session.
+         *
+         * Keine Signed URL.
+         * Kein externer Browser.
+         */
+        objectUrl =
+          URL.createObjectURL(
+            blob,
+          );
+
+        setImageUrl(
+          objectUrl,
+        );
+      })
+      .catch(
+        (error: unknown) => {
+          if (disposed) {
+            return;
+          }
+
+          console.error(
+            'Ticket image download failed:',
+            error,
+          );
+
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : 'Das Bild konnte nicht aus dem Speicher geladen werden.',
+          );
+        },
+      )
+      .finally(() => {
+        if (!disposed) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      disposed = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(
+          objectUrl,
+        );
+      }
+    };
+  }, [
+    attachment.file_path,
+    retryKey,
+  ]);
+
+  if (loading) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+        <div className="h-44 animate-pulse bg-slate-200 dark:bg-slate-700" />
+
+        <div className="p-3">
+          <p className="truncate text-xs font-bold text-slate-500">
+            {attachment.file_name}
+          </p>
+
+          <p className="mt-1 text-[10px] text-slate-400">
+            Bild wird geladen …
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (
-    !imageUrl ||
-    imageFailed
+    loadError ||
+    !imageUrl
   ) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+        <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
           <ImagePlus size={18} />
 
           <p className="text-xs font-bold">
-            Bild nicht darstellbar
+            Bild konnte nicht geladen werden
           </p>
         </div>
 
-        <p className="mt-2 break-words text-xs text-slate-600 dark:text-slate-300">
+        <p className="mt-2 break-words text-xs font-semibold text-slate-700 dark:text-slate-200">
           {attachment.file_name}
         </p>
 
-        <p className="mt-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
-          Dieses Bild wurde vermutlich mit einer
-          älteren fehlerhaften Android-Version
-          hochgeladen. Bitte hänge es erneut an.
-        </p>
+        {loadError && (
+          <p className="mt-2 break-words text-[10px] leading-4 text-red-600 dark:text-red-300">
+            {loadError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={() =>
+            setRetryKey(
+              (current) =>
+                current + 1,
+            )
+          }
+          className="mt-3 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 active:scale-95 dark:border-red-900 dark:bg-red-950"
+        >
+          Erneut laden
+        </button>
       </div>
     );
   }
@@ -662,13 +771,16 @@ function CommentAttachmentPreview({
         <div className="relative overflow-hidden bg-slate-100 dark:bg-slate-900">
           <img
             src={imageUrl}
-            alt={attachment.file_name}
-            className="h-44 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-            loading="lazy"
-            decoding="async"
-            onError={() =>
-              setImageFailed(true)
+            alt={
+              attachment.file_name
             }
+            className="h-44 w-full object-cover"
+            decoding="async"
+            onError={() => {
+              setLoadError(
+                'Die aus Supabase geladene Datei konnte nicht als Bild decodiert werden.',
+              );
+            }}
           />
 
           <div className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-lg backdrop-blur">

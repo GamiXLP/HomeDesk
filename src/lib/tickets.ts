@@ -158,31 +158,28 @@ export async function getComments(ticketId: string) {
 
   if (attachmentError) throw attachmentError;
 
-  const attachments = (attachmentData ?? []) as TicketAttachment[];
-  let attachmentsWithUrls = attachments;
+  const attachments =
+    (attachmentData ?? []) as TicketAttachment[];
 
-  if (attachments.length > 0) {
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from(TICKET_ATTACHMENTS_BUCKET)
-      .createSignedUrls(
-        attachments.map((attachment) => attachment.file_path),
-        60 * 60,
-      );
+  const attachmentsByCommentId =
+    new Map<string, TicketAttachment[]>();
 
-    if (signedError) console.warn('Signed attachment URLs could not be created:', signedError);
+  for (const attachment of attachments) {
+    if (!attachment.comment_id) {
+      continue;
+    }
 
-    attachmentsWithUrls = attachments.map((attachment, index) => ({
-      ...attachment,
-      signed_url: signedData?.[index]?.signedUrl ?? null,
-    }));
-  }
+    const existing =
+      attachmentsByCommentId.get(
+        attachment.comment_id,
+      ) ?? [];
 
-  const attachmentsByCommentId = new Map<string, TicketAttachment[]>();
-  for (const attachment of attachmentsWithUrls) {
-    if (!attachment.comment_id) continue;
-    const existing = attachmentsByCommentId.get(attachment.comment_id) ?? [];
     existing.push(attachment);
-    attachmentsByCommentId.set(attachment.comment_id, existing);
+
+    attachmentsByCommentId.set(
+      attachment.comment_id,
+      existing,
+    );
   }
 
   return comments.map((comment) => ({
@@ -266,35 +263,54 @@ async function uploadCommentImages(ticketId: string, commentId: string, uploaded
   try {
     await Promise.all(
       plannedUploads.map(async ({ file, filePath }) => {
-        let fileBody: ArrayBuffer;
-
-        try {
-          // Wichtig für Android/Capacitor:
-          // Nicht das native File direkt an Supabase geben.
-          fileBody = await file.arrayBuffer();
-        } catch (readError) {
-          console.error(
-            'Attachment could not be read:',
-            readError,
-          );
-
+        if (
+          file.size <= 0
+        ) {
           throw new Error(
-            `"${file.name}" konnte auf diesem Gerät nicht gelesen werden.`,
+            `"${file.name}" enthält keine Bilddaten.`,
           );
         }
 
-        const { error: uploadError } =
-          await supabase.storage
-            .from(TICKET_ATTACHMENTS_BUCKET)
-            .upload(
-              filePath,
-              fileBody,
-              {
-                contentType: file.type,
-                cacheControl: '3600',
-                upsert: false,
-              },
-            );
+        if (
+          !file.type.startsWith('image/')
+        ) {
+          throw new Error(
+            `"${file.name}" besitzt keinen gültigen Bildtyp.`,
+          );
+        }
+
+        /*
+         * mobileImages.ts hat auf Android bereits:
+         *
+         * natives Bild
+         * -> WebView Decode
+         * -> Canvas
+         * -> neues JPEG
+         * -> Browser File
+         *
+         * Deshalb den fertigen File jetzt UNVERÄNDERT
+         * an Supabase übergeben.
+         */
+        const {
+          error: uploadError,
+        } = await supabase.storage
+          .from(
+            TICKET_ATTACHMENTS_BUCKET,
+          )
+          .upload(
+            filePath,
+            file,
+            {
+              contentType:
+                file.type ||
+                'image/jpeg',
+
+              cacheControl:
+                '3600',
+
+              upsert: false,
+            },
+          );
 
         if (uploadError) {
           console.error(
@@ -302,23 +318,11 @@ async function uploadCommentImages(ticketId: string, commentId: string, uploaded
             uploadError,
           );
 
-          const rawMessage =
-            typeof uploadError.message ===
-            'string'
-              ? uploadError.message
-              : '';
-
-          const browserEventError =
-            rawMessage.includes(
-              '"isTrusted"',
-            ) ||
-            rawMessage ===
-              '[object Object]';
-
           throw new Error(
-            browserEventError
-              ? `"${file.name}" konnte von der Android-App nicht hochgeladen werden. Bitte versuche es erneut.`
-              : `Upload von "${file.name}" fehlgeschlagen: ${rawMessage || 'Unbekannter Speicherfehler'}`,
+            `Upload von "${file.name}" fehlgeschlagen: ${
+              uploadError.message ||
+              'Unbekannter Speicherfehler'
+            }`,
           );
         }
 
