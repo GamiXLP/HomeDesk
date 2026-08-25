@@ -26,6 +26,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
   const category = searchParams.get('category') ?? 'all';
   const assigned = searchParams.get('assigned') ?? 'all';
   const age = searchParams.get('age') ?? 'all';
+  const due = searchParams.get('due') ?? 'all';
   const sort = (searchParams.get('sort') ?? 'updated_desc') as SortMode;
   const requestedPage = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
 
@@ -58,9 +59,12 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
         if (assigned === 'none' && ticket.assigned_to) return false;
         if (assigned !== 'all' && assigned !== 'none' && ticket.assigned_to !== assigned) return false;
         if (age !== 'all' && Date.now() - new Date(ticket.updated_at).getTime() < Number(age) * 86_400_000) return false;
+        if (due === 'overdue' && (!ticket.due_at || new Date(ticket.due_at).getTime() >= Date.now() || !isTicketOpen(ticket))) return false;
+        if (due === 'today' && (!ticket.due_at || new Date(ticket.due_at).toDateString() !== new Date().toDateString())) return false;
+        if (due === 'none' && ticket.due_at) return false;
         if (
           normalized &&
-          !`${ticketReference(ticket)} ${ticket.ticket_number ?? ''} ${ticket.title} ${ticket.description} ${ticket.category} ${ticket.area} ${ticket.type} ${ticket.device ?? ''} ${ticket.entity_id ?? ''}`
+          !`${ticketReference(ticket)} ${ticket.ticket_number ?? ''} ${ticket.title} ${ticket.description} ${ticket.category} ${ticket.area} ${ticket.type} ${ticket.device ?? ''} ${ticket.entity_id ?? ''} ${ticket.solution_summary ?? ''} ${ticket.root_cause ?? ''} ${ticket.resolution_steps ?? ''}`
             .toLowerCase()
             .includes(normalized)
         ) return false;
@@ -75,7 +79,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
         }
         return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
       });
-  }, [tickets, query, scope, status, priority, area, category, assigned, age, sort]);
+  }, [tickets, query, scope, status, priority, area, category, assigned, age, due, sort]);
 
   const pageSize = preferences.ticketPageSize;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -90,7 +94,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
     setSearchParams(next, { replace: true });
   }, [pageCount, requestedPage, searchParams, setSearchParams]);
 
-  const activeFilterCount = [scope !== preferences.defaultTicketScope, status !== 'all', priority !== 'all', area !== 'all', category !== 'all', assigned !== 'all', age !== 'all'].filter(Boolean).length;
+  const activeFilterCount = [scope !== preferences.defaultTicketScope, status !== 'all', priority !== 'all', area !== 'all', category !== 'all', assigned !== 'all', age !== 'all', due !== 'all'].filter(Boolean).length;
   const firstShown = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastShown = Math.min(page * pageSize, filtered.length);
 
@@ -145,6 +149,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
             <FilterSelect label="Kategorie" value={category} onChange={(value) => setParam('category', value)}>
               <option value="all">Alle Kategorien</option>{categories.map((item) => <option key={item}>{item}</option>)}
             </FilterSelect>
+            <FilterSelect label="Fälligkeit" value={due} onChange={(value) => setParam('due', value)}><option value="all">Alle Fälligkeiten</option><option value="overdue">Überfällig</option><option value="today">Heute fällig</option><option value="none">Ohne Fälligkeit</option></FilterSelect>
             <div className="flex justify-end sm:col-span-2 lg:col-span-4">
               <button onClick={resetFilters} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white"><RotateCcw size={14} />Filter zurücksetzen</button>
             </div>
@@ -163,6 +168,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
           {assigned === 'none' && <FilterChip label="Nicht zugewiesen" onRemove={() => setParam('assigned', 'all')} />}
           {assigned !== 'all' && assigned !== 'none' && <FilterChip label="Bearbeiter gefiltert" onRemove={() => setParam('assigned', 'all')} />}
           {age !== 'all' && <FilterChip label={`Seit ${age}+ Tagen ruhig`} onRemove={() => setParam('age', 'all')} />}
+          {due !== 'all' && <FilterChip label={due === 'overdue' ? 'Überfällig' : due === 'today' ? 'Heute fällig' : 'Ohne Fälligkeit'} onRemove={() => setParam('due', 'all')} />}
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { Check, Eye, Home, LayoutList, Laptop, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
+import { Bell, Check, Eye, LayoutList, Laptop, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -8,6 +8,7 @@ import { usePreferences, type DashboardRecentCount, type DefaultTicketScope, typ
 import { useTheme } from '../hooks/useTheme';
 import { cn } from '../utils/cn';
 import { HomeAssistantSettingsCard } from '../components/settings/HomeAssistantSettingsCard';
+import { disablePush, enableAndroidPush, supportsNativePush } from '../lib/pushNotifications';
 
 export function SettingsPage() {
   const { profile, user, updateDisplayName } = useAuth();
@@ -88,6 +89,13 @@ export function SettingsPage() {
         </Card>
 
         <HomeAssistantSettingsCard />
+
+        <Card className="p-4 sm:p-6">
+          <SectionHeader icon={Bell} title="Android Push" text="Sofort über Tickets, Eskalationen und Kommentare informiert." tone="sky" />
+          <p className="mt-5 text-xs leading-5 text-slate-500">Push-Benachrichtigungen werden pro Gerät registriert. Beobachtete Tickets und Fälligkeiten können damit gezielt zugestellt werden.</p>
+          <div className="mt-4 flex flex-wrap gap-2"><Button disabled={!user || !supportsNativePush()} onClick={() => user && void enableAndroidPush(user.id).then(() => showToast('Android Push aktiviert')).catch((error) => showToast('Push konnte nicht aktiviert werden', { message: error instanceof Error ? error.message : undefined, tone: 'error' }))}><Bell size={16} />Push aktivieren</Button><Button variant="secondary" disabled={!user} onClick={() => user && void disablePush(user.id).then(() => showToast('Push deaktiviert'))}>Deaktivieren</Button></div>
+          {!supportsNativePush() && <p className="mt-3 text-[11px] font-semibold text-slate-400">In der Android-App verfügbar.</p>}
+        </Card>
 
         <Card className="p-4 sm:p-6">
           <SectionHeader icon={Laptop} title="Schnellzugriff" text="Shortcuts für den Alltag." tone="slate" />

@@ -5,11 +5,13 @@ export function isTicketOpen(ticket: Ticket) {
   return !closedStatuses.includes(ticket.status);
 }
 
-export function ticketNumber(ticket: Ticket) {
+type TicketIdentity = Pick<Ticket, 'id' | 'ticket_number'>;
+
+export function ticketNumber(ticket: TicketIdentity) {
   return ticket.ticket_number ? String(ticket.ticket_number).padStart(8, '0') : null;
 }
 
-export function ticketReference(ticketOrId: Ticket | string) {
+export function ticketReference(ticketOrId: TicketIdentity | string) {
   if (typeof ticketOrId !== 'string') {
     const number = ticketNumber(ticketOrId);
     if (number) return `HD-${number}`;
@@ -21,7 +23,7 @@ export function ticketReference(ticketOrId: Ticket | string) {
   return `HD-${ticketOrId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
-export function ticketPath(ticket: Ticket) {
+export function ticketPath(ticket: TicketIdentity) {
   return `/app/tickets/${ticketNumber(ticket) ?? ticket.id}`;
 }
 

@@ -12,6 +12,8 @@ export type TicketStatus =
   | 'archived';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type CommentVisibility = 'public' | 'internal';
+export type TicketRelationType = 'relates_to' | 'blocks' | 'duplicates' | 'caused_by';
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export type Profile = {
   id: string;
@@ -35,12 +37,36 @@ export type Ticket = {
   device?: string | null;
   entity_id?: string | null;
   desired_date?: string | null;
+  due_at?: string | null;
+  solution_summary?: string | null;
+  root_cause?: string | null;
+  resolution_steps?: string | null;
+  escalation_level?: number;
+  escalated_at?: string | null;
   created_by: string;
   assigned_to?: string | null;
   created_at: string;
   updated_at: string;
   closed_at?: string | null;
   archived_at?: string | null;
+};
+
+export type TicketSubtask = {
+  id: string; ticket_id: string; title: string; completed: boolean;
+  position: number; created_by: string; created_at: string; completed_at?: string | null;
+};
+
+export type TicketRelation = {
+  id: string; ticket_id: string; related_ticket_id: string;
+  relation_type: TicketRelationType; created_by: string; created_at: string;
+  related_ticket?: Pick<Ticket, 'id' | 'ticket_number' | 'title' | 'status'>;
+};
+
+export type TicketWatcher = { ticket_id: string; user_id: string; created_at: string };
+
+export type TicketRecurrence = {
+  id: string; ticket_id: string; frequency: RecurrenceFrequency; interval_count: number;
+  next_run_at: string; active: boolean; created_at: string;
 };
 
 export type TicketAttachment = {

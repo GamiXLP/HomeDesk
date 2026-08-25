@@ -59,12 +59,13 @@ import {
 } from '../constants/tickets';
 import type { Profile, Ticket, TicketAttachment, TicketComment, TicketEvent } from '../types/database';
 import { relativeTime, ticketPath, ticketReference } from '../utils/tickets';
+import { TicketIntelligence } from '../components/tickets/TicketIntelligence';
 
 export function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
-  const { markRead, replaceTicket } = useTickets();
+  const { tickets, markRead, replaceTicket } = useTickets();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -143,7 +144,7 @@ export function TicketDetailPage() {
   }, [ticket?.id, reload]);
 
   async function adminPatch(
-    patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to'>>,
+    patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to' | 'due_at'>>,
   ) {
     if (!ticket || adminSaving) return;
     try {
@@ -435,6 +436,8 @@ async function submitComment(event: React.FormEvent) {
               {events.length === 0 ? <p className="text-sm text-slate-400">Noch keine Historie vorhanden.</p> : events.map((event, index) => <EventRow key={event.id} event={event} last={index === events.length - 1} />)}
             </div>
           </Card>
+
+          {user && <TicketIntelligence ticket={ticket} tickets={tickets} userId={user.id} isAdmin={isAdmin} onTicketChange={(next) => { setTicket(next); replaceTicket(next); }} />}
         </main>
 
         {isAdmin ? (
@@ -459,6 +462,7 @@ async function submitComment(event: React.FormEvent) {
                   <option value="">Nicht zugewiesen</option>
                   {profiles.filter((profile) => profile.role === 'admin').map((profile) => <option key={profile.id} value={profile.id}>{profile.display_name}</option>)}
                 </AdminSelect>
+                <label><span className="field-label">Fällig am</span><input type="datetime-local" className="field-input mt-1" value={ticket.due_at ? ticket.due_at.slice(0, 16) : ''} disabled={adminSaving} onChange={(event) => void adminPatch({ due_at: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
               </div>
 
               {assignedProfile && <div className="mt-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/70"><UserRound size={17} className="text-slate-400" /><div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Bearbeiter</p><p className="text-sm font-bold text-slate-900 dark:text-white">{assignedProfile.display_name}</p></div></div>}

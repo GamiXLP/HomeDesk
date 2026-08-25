@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { sendTicketPush } from '../lib/push.mjs';
 
 const allowedEventTypes = new Set([
     'ticket_created',
@@ -194,9 +195,19 @@ export async function handler(event) {
             html: mail.html,
         });
 
+        const pushResult = await sendTicketPush(supabaseAdmin, ticket, {
+            title: mail.subject,
+            body: eventType === 'comment_created' ? `${requesterProfile.display_name} hat kommentiert.` : 'Das Ticket wurde aktualisiert.',
+            excludeUserId: user.id,
+        }).catch((pushError) => {
+            console.warn('Push notification failed:', pushError);
+            return { sent: 0, failed: 1 };
+        });
+
         return jsonResponse(200, {
             ok: true,
             recipients: to.length,
+            push: pushResult,
         });
     } catch (error) {
         console.error(error);

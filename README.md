@@ -2,7 +2,7 @@
 
 Privates Smart-Home-Ticketsystem im Home-Assistant-Stil für zwei Rollen: Admin/Bearbeiter und Benutzerin/Antragstellerin.
 
-## MVP-Funktionen
+## HomeDesk 3.0
 
 - Supabase Auth Login per E-Mail/Passwort
 - Rollen über `profiles.role`
@@ -14,6 +14,11 @@ Privates Smart-Home-Ticketsystem im Home-Assistant-Stil für zwei Rollen: Admin/
 - Admin kann Status und Priorität ändern
 - PostgreSQL RLS schützt Daten serverseitig
 - Netlify SPA-Deployment vorbereitet
+- Ticket Intelligence mit Unteraufgaben, Fälligkeiten und Beziehungen
+- Lösungsdokumentation und Volltext-nahe Suche über Ticketwissen
+- Beobachter, Eskalationsstufen und wiederkehrende Tickets
+- Home-Assistant-Ticketerstellung über abgesicherte RPC/Edge Function
+- Native Android-Push-Registrierung über Capacitor
 
 ## Architektur
 
@@ -51,7 +56,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 2. SQL Editor öffnen.
 3. Inhalt von `supabase/migrations/001_init_homedesk.sql` ausführen.
 4. In Storage einen privaten Bucket erstellen: `ticket-attachments`.
-5. Danach `supabase/migrations/002_storage.sql` ausführen.
+5. Danach alle weiteren Migrationen bis `006_homedesk_v3.sql` in Reihenfolge ausführen.
 6. Optional `supabase/seed.sql` ausführen.
 7. In Supabase Auth zwei Nutzer anlegen.
 8. In `profiles` deinen Nutzer auf `admin` setzen:
@@ -102,12 +107,9 @@ supabase/
   seed.sql
 ```
 
-## Nächste Ausbaustufen
+## v3-Automation betreiben
 
-- Datei-Upload UI mit Supabase Storage
-- Ticket-Historie sichtbar rendern
-- Realtime Subscriptions für neue Tickets und Kommentare
-- Home-Assistant Webhook über Supabase Edge Function oder Netlify Function
-- E-Mail-Benachrichtigungen
-- Einstellungen aus DB statt statischer Konstanten
-- Benutzerverwaltung im Admin-Bereich
+- `select public.escalate_overdue_tickets();` stündlich oder täglich per Supabase Cron ausführen.
+- `public.create_ha_ticket(...)` ausschließlich über eine authentifizierte Edge Function mit validiertem Home-Assistant-Webhook aufrufen.
+- Für Android Push `google-services.json` in `android/app/` hinterlegen und FCM-Zustellung serverseitig aus `push_devices` anstoßen.
+- Wiederholungen werden in `ticket_recurrences` geplant; ein Cron/Edge-Function-Worker erstellt zum `next_run_at` eine Kopie und berechnet den Folgetermin.

@@ -9,6 +9,12 @@ import type {
   TicketPriority,
   TicketRead,
   TicketStatus,
+  TicketSubtask,
+  TicketRelation,
+  TicketRelationType,
+  TicketWatcher,
+  TicketRecurrence,
+  RecurrenceFrequency,
 } from '../types/database';
 
 const TICKET_ATTACHMENTS_BUCKET = 'ticket-attachments';
@@ -99,7 +105,7 @@ export async function createTicket(
 
 export async function updateTicketAdmin(
   id: string,
-  patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to'>>,
+  patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to' | 'due_at' | 'solution_summary' | 'root_cause' | 'resolution_steps'>>,
   beforeTicket?: Ticket,
 ) {
   const before = beforeTicket ?? (await getTicket(id));
@@ -123,6 +129,72 @@ export async function updateTicketAdmin(
   );
 
   return ticket;
+}
+
+export async function getTicketIntelligence(ticketId: string, userId: string) {
+  const [subtasks, relations, watchers, recurrence] = await Promise.all([
+    supabase.from('ticket_subtasks').select('*').eq('ticket_id', ticketId).order('position'),
+    supabase.from('ticket_relations').select('*, related_ticket:tickets!ticket_relations_related_ticket_id_fkey(id,ticket_number,title,status)').eq('ticket_id', ticketId).order('created_at'),
+    supabase.from('ticket_watchers').select('*').eq('ticket_id', ticketId),
+    supabase.from('ticket_recurrences').select('*').eq('ticket_id', ticketId).maybeSingle(),
+  ]);
+  if (subtasks.error) throw subtasks.error;
+  if (relations.error) throw relations.error;
+  if (watchers.error) throw watchers.error;
+  if (recurrence.error) throw recurrence.error;
+  return {
+    subtasks: (subtasks.data ?? []) as TicketSubtask[],
+    relations: (relations.data ?? []) as unknown as TicketRelation[],
+    watchers: (watchers.data ?? []) as TicketWatcher[],
+    watching: (watchers.data ?? []).some((watcher) => watcher.user_id === userId),
+    recurrence: recurrence.data as TicketRecurrence | null,
+  };
+}
+
+export async function saveTicketRecurrence(ticketId: string, frequency: RecurrenceFrequency, intervalCount: number, nextRunAt: string) {
+  const { data, error } = await supabase.from('ticket_recurrences').upsert({ ticket_id: ticketId, frequency, interval_count: intervalCount, next_run_at: nextRunAt, active: true }, { onConflict: 'ticket_id' }).select('*').single();
+  if (error) throw error;
+  return data as TicketRecurrence;
+}
+
+export async function disableTicketRecurrence(ticketId: string) {
+  const { error } = await supabase.from('ticket_recurrences').update({ active: false }).eq('ticket_id', ticketId);
+  if (error) throw error;
+}
+
+export async function addSubtask(ticketId: string, title: string, userId: string, position: number) {
+  const { data, error } = await supabase.from('ticket_subtasks').insert({ ticket_id: ticketId, title: title.trim(), created_by: userId, position }).select('*').single();
+  if (error) throw error;
+  return data as TicketSubtask;
+}
+
+export async function setSubtaskCompleted(id: string, completed: boolean) {
+  const { data, error } = await supabase.from('ticket_subtasks').update({ completed, completed_at: completed ? new Date().toISOString() : null }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return data as TicketSubtask;
+}
+
+export async function removeSubtask(id: string) {
+  const { error } = await supabase.from('ticket_subtasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addTicketRelation(ticketId: string, relatedTicketId: string, relationType: TicketRelationType, userId: string) {
+  const { error } = await supabase.from('ticket_relations').insert({ ticket_id: ticketId, related_ticket_id: relatedTicketId, relation_type: relationType, created_by: userId });
+  if (error) throw error;
+}
+
+export async function removeTicketRelation(id: string) {
+  const { error } = await supabase.from('ticket_relations').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function setWatching(ticketId: string, userId: string, watching: boolean) {
+  const request = watching
+    ? supabase.from('ticket_watchers').upsert({ ticket_id: ticketId, user_id: userId })
+    : supabase.from('ticket_watchers').delete().eq('ticket_id', ticketId).eq('user_id', userId);
+  const { error } = await request;
+  if (error) throw error;
 }
 
 export async function deleteTicketAdmin(id: string) {
@@ -382,7 +454,7 @@ function sanitizeFileName(fileName: string) {
 function buildTicketChanges(
   before: Ticket,
   after: Ticket,
-  patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to'>>,
+  patch: Partial<Pick<Ticket, 'status' | 'priority' | 'category' | 'area' | 'assigned_to' | 'due_at' | 'solution_summary' | 'root_cause' | 'resolution_steps'>>,
 ) {
   const changes: Record<string, string> = {};
 
