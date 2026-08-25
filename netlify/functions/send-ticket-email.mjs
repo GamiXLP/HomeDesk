@@ -152,7 +152,7 @@ export async function handler(event) {
                 recipients.add(assignedEmail);
             }
         } else {
-            const fallbackAdminEmails = getAdminEmailsFromEnv(adminEmail);
+            const fallbackAdminEmails = await getEnabledAdminEmails(supabaseAdmin, adminEmail);
 
             for (const email of fallbackAdminEmails) {
                 recipients.add(email);
@@ -160,14 +160,6 @@ export async function handler(event) {
         }
 
         const to = [...recipients].filter(Boolean);
-
-        if (to.length === 0) {
-            return jsonResponse(200, {
-                ok: true,
-                skipped: true,
-                reason: 'No recipients found.',
-            });
-        }
 
         const mail = buildMail({
             eventType,
@@ -178,22 +170,24 @@ export async function handler(event) {
             changes,
         });
 
-        const transporter = nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465,
-            auth: {
-                user: smtpUser,
-                pass: smtpPass,
-            },
-        });
+        if (to.length > 0) {
+            const transporter = nodemailer.createTransport({
+                host: smtpHost,
+                port: smtpPort,
+                secure: smtpPort === 465,
+                auth: {
+                    user: smtpUser,
+                    pass: smtpPass,
+                },
+            });
 
-        await transporter.sendMail({
-            from: mailFrom,
-            to,
-            subject: mail.subject,
-            html: mail.html,
-        });
+            await transporter.sendMail({
+                from: mailFrom,
+                to,
+                subject: mail.subject,
+                html: mail.html,
+            });
+        }
 
         const pushResult = await sendTicketPush(supabaseAdmin, ticket, {
             title: mail.subject,
@@ -222,6 +216,14 @@ export async function handler(event) {
 async function getUserEmail(supabaseAdmin, userId) {
     if (!userId) return null;
 
+    const { data: preference, error: preferenceError } = await supabaseAdmin
+        .from('profiles')
+        .select('email_notifications_enabled')
+        .eq('id', userId)
+        .single();
+
+    if (preferenceError || preference?.email_notifications_enabled === false) return null;
+
     const {
         data: { user },
         error,
@@ -230,6 +232,18 @@ async function getUserEmail(supabaseAdmin, userId) {
     if (error || !user?.email) return null;
 
     return user.email;
+}
+
+async function getEnabledAdminEmails(supabaseAdmin, fallbackAdminEmailEnv) {
+    const { data: admins, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .eq('email_notifications_enabled', true);
+
+    if (error) return getAdminEmailsFromEnv(fallbackAdminEmailEnv);
+    const emails = await Promise.all((admins || []).map((admin) => getUserEmail(supabaseAdmin, admin.id)));
+    return emails.filter(Boolean);
 }
 
 function getAdminEmailsFromEnv(adminEmailEnv) {

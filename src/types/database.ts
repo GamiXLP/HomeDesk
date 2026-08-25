@@ -20,6 +20,7 @@ export type Profile = {
   display_name: string;
   role: Role;
   avatar_url?: string | null;
+  email_notifications_enabled: boolean;
   created_at: string;
 };
 

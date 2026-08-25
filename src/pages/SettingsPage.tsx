@@ -1,4 +1,4 @@
-import { Bell, Check, Eye, LayoutList, Laptop, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
+import { Bell, Check, Eye, LayoutList, Laptop, Mail, Moon, Palette, RotateCcw, Save, SlidersHorizontal, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -9,9 +9,10 @@ import { useTheme } from '../hooks/useTheme';
 import { cn } from '../utils/cn';
 import { HomeAssistantSettingsCard } from '../components/settings/HomeAssistantSettingsCard';
 import { disablePush, enableAndroidPush, supportsNativePush } from '../lib/pushNotifications';
+import { supabase } from '../lib/supabase';
 
 export function SettingsPage() {
-  const { profile, user, updateDisplayName } = useAuth();
+  const { profile, user, updateDisplayName, refreshProfile } = useAuth();
   const { theme, setTheme } = useTheme();
   const { preferences, updatePreferences, resetPreferences } = usePreferences();
   const { showToast } = useToast();
@@ -31,6 +32,17 @@ export function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function setEmailNotifications(enabled: boolean) {
+    if (!user) return;
+    const { error } = await supabase.from('profiles').update({ email_notifications_enabled: enabled }).eq('id', user.id);
+    if (error) {
+      showToast('E-Mail-Einstellung konnte nicht gespeichert werden', { message: error.message, tone: 'error' });
+      return;
+    }
+    await refreshProfile();
+    showToast(enabled ? 'E-Mail-Benachrichtigungen aktiviert' : 'E-Mail-Benachrichtigungen deaktiviert');
   }
 
   return (
@@ -89,6 +101,11 @@ export function SettingsPage() {
         </Card>
 
         <HomeAssistantSettingsCard />
+
+        <Card className="p-4 sm:p-6">
+          <SectionHeader icon={Mail} title="E-Mail-Benachrichtigungen" text="Optionale Nachrichten zu Tickets und Kommentaren." tone="violet" />
+          <div className="mt-6"><ToggleRow label="Ticket-E-Mails erhalten" text="Benachrichtigt dich über neue Kommentare, Zuweisungen und Ticketänderungen. Passwort- und Sicherheitsmails bleiben immer aktiv." checked={profile?.email_notifications_enabled ?? true} onChange={(enabled) => void setEmailNotifications(enabled)} /></div>
+        </Card>
 
         <Card className="p-4 sm:p-6">
           <SectionHeader icon={Bell} title="Android Push" text="Sofort über Tickets, Eskalationen und Kommentare informiert." tone="sky" />
