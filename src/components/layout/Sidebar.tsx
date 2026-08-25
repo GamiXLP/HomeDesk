@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   CalendarDays,
+  Cpu,
   Columns3,
   Home,
   Inbox,
@@ -27,6 +28,7 @@ const nav = [
   { to: '/app/calendar', label: 'Kalender', icon: CalendarDays },
   { to: '/app/inbox', label: 'Activity Hub', icon: Bell },
   { to: '/app/knowledge', label: 'Wissen', icon: BookOpen },
+  { to: '/app/assets', label: 'Home Operations', icon: Cpu },
   { to: '/app/statistics', label: 'Statistik', icon: BarChart3 },
   { to: '/app/settings', label: 'Einstellungen', icon: Settings },
 ];

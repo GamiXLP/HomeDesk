@@ -50,7 +50,28 @@ export type Ticket = {
   updated_at: string;
   closed_at?: string | null;
   archived_at?: string | null;
+  asset_id?: string | null;
+  tags?: string[];
+  approval_required?: boolean;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  reopened_count?: number;
+  response_due_at?: string | null;
+  first_response_at?: string | null;
 };
+
+export type Asset = {
+  id: string; name: string; manufacturer?: string | null; model?: string | null;
+  serial_number?: string | null; purchase_date?: string | null; warranty_until?: string | null;
+  area: string; category: string; notes?: string | null; image_url?: string | null;
+  health_override?: number | null; created_by: string; created_at: string; updated_at: string;
+};
+export type AssetEntity = { id: string; asset_id: string; entity_id: string; label?: string | null; created_at: string };
+export type MaintenancePlan = { id: string; asset_id?: string | null; title: string; description?: string | null; frequency: RecurrenceFrequency; interval_count: number; next_due_at: string; last_completed_at?: string | null; active: boolean; auto_create_ticket: boolean; created_by: string; created_at: string };
+export type TicketTemplateV3 = { id: string; name: string; description?: string | null; ticket_defaults: Record<string, unknown>; subtasks: string[]; active: boolean; created_by: string; created_at: string };
+export type UserNotification = { id: string; user_id: string; ticket_id?: string | null; kind: string; title: string; body?: string | null; metadata: Record<string, unknown>; read_at?: string | null; created_at: string };
+export type TicketApproval = { id: string; ticket_id: string; requested_by: string; requested_from: string; status: 'pending' | 'approved' | 'rejected'; note?: string | null; decided_at?: string | null; created_at: string };
+export type HomeAssistantState = { entity_id: string; state: string; last_changed: string; attributes: { friendly_name?: string; device_class?: string; unit_of_measurement?: string; battery_level?: number; [key: string]: unknown } };
 
 export type TicketSubtask = {
   id: string; ticket_id: string; title: string; completed: boolean;

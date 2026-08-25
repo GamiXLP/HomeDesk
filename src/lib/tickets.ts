@@ -15,6 +15,7 @@ import type {
   TicketWatcher,
   TicketRecurrence,
   RecurrenceFrequency,
+  TicketApproval,
 } from '../types/database';
 
 const TICKET_ATTACHMENTS_BUCKET = 'ticket-attachments';
@@ -196,6 +197,10 @@ export async function setWatching(ticketId: string, userId: string, watching: bo
   const { error } = await request;
   if (error) throw error;
 }
+
+export async function getTicketApprovals(ticketId: string) { const { data, error } = await supabase.from('ticket_approvals').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: false }); if (error) throw error; return data as TicketApproval[]; }
+export async function requestTicketApproval(ticketId: string, requestedBy: string, requestedFrom: string) { const { error } = await supabase.from('ticket_approvals').insert({ ticket_id: ticketId, requested_by: requestedBy, requested_from: requestedFrom }); if (error) throw error; await supabase.from('tickets').update({ approval_required: true }).eq('id', ticketId); }
+export async function decideTicketApproval(id: string, ticketId: string, status: 'approved' | 'rejected', userId: string) { const { error } = await supabase.from('ticket_approvals').update({ status, decided_at: new Date().toISOString() }).eq('id', id); if (error) throw error; if (status === 'approved') await supabase.from('tickets').update({ approved_at: new Date().toISOString(), approved_by: userId }).eq('id', ticketId); }
 
 export async function deleteTicketAdmin(id: string) {
   try {

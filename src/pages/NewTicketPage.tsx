@@ -12,6 +12,7 @@ import {
   ticketTypes,
 } from '../constants/tickets';
 import { useAuth } from '../hooks/useAuth';
+import { useTickets } from '../hooks/useTickets';
 import { createTicket, typed } from '../lib/tickets';
 import type { TicketPriority } from '../types/database';
 import { ticketPath } from '../utils/tickets';
@@ -33,6 +34,7 @@ const emptyForm = {
 export function NewTicketPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { tickets } = useTickets();
   const [form, setForm] = useState<typeof emptyForm>(() => {
     try {
       const draft = localStorage.getItem(DRAFT_KEY);
@@ -67,6 +69,11 @@ export function NewTicketPage() {
     if (form.type) points += 10;
     return points;
   }, [form]);
+  const duplicateCandidates = useMemo(() => {
+    const words = new Set(form.title.toLowerCase().split(/[^a-zäöüß0-9]+/).filter((word) => word.length > 3));
+    if (!words.size || form.title.trim().length < 5) return [];
+    return tickets.map((ticket) => ({ ticket, score: ticket.title.toLowerCase().split(/[^a-zäöüß0-9]+/).filter((word) => words.has(word)).length })).filter((item) => item.score > 0).sort((a,b) => b.score-a.score).slice(0,3).map((item)=>item.ticket);
+  }, [form.title, tickets]);
 
   function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -193,6 +200,8 @@ export function NewTicketPage() {
               <Field label="Home-Assistant Entity-ID" value={form.entity_id} onChange={(value) => update('entity_id', value)} placeholder="Optional, z. B. light.wohnzimmer" />
               <Field label="Wunschdatum" type="date" value={form.desired_date} onChange={(value) => update('desired_date', value)} />
             </div>
+
+            {duplicateCandidates.length > 0 && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30"><p className="text-xs font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">Mögliche Duplikate erkannt</p><div className="mt-2 space-y-1">{duplicateCandidates.map(ticket=><Link key={ticket.id} to={ticketPath(ticket)} className="block truncate text-sm font-bold text-amber-900 hover:underline dark:text-amber-100">HD-{ticket.ticket_number} · {ticket.title}</Link>)}</div></div>}
 
             {error && <p className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300">{error}</p>}
 

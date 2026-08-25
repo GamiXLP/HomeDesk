@@ -25,6 +25,7 @@ const StatisticsPage = lazy(() =>
 const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const OperationsPage = lazy(() => import('./pages/OperationsPage').then((module) => ({ default: module.OperationsPage })));
+const SmartHomePage = lazy(() => import('./pages/SmartHomePage').then((module) => ({ default: module.SmartHomePage })));
 
 function PageFallback() {
   return (
@@ -60,6 +61,11 @@ export function App() {
             <Route path="calendar" element={<OperationsPage />} />
             <Route path="inbox" element={<OperationsPage />} />
             <Route path="knowledge" element={<OperationsPage />} />
+            <Route path="assets" element={<SmartHomePage />} />
+            <Route path="health" element={<SmartHomePage />} />
+            <Route path="maintenance" element={<SmartHomePage />} />
+            <Route path="rooms" element={<SmartHomePage />} />
+            <Route path="display" element={<SmartHomePage />} />
             <Route path="settings" element={<SettingsPage />} />
 
             <Route element={<AdminRoute />}>

@@ -11,12 +11,18 @@ export default async (request) => {
   if (authorization !== `Bearer ${secret}`) return response(401, { ok: false, error: 'Unauthorized' });
   try {
     const input = await request.json();
+    const sourceReference = clean(input.source_reference, 0, 255, true);
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    if (input.event === 'resolved') {
+      if (!sourceReference) return response(400, { ok: false, error: 'source_reference is required for resolved events' });
+      const { data, error } = await supabase.rpc('resolve_ha_ticket', { p_source_reference: sourceReference, p_resolution: typeof input.resolution === 'string' ? input.resolution.slice(0, 2000) : 'Home Assistant meldet wieder Normalzustand.' });
+      if (error) throw error;
+      return response(200, { ok: true, ticketId: data, resolved: Boolean(data) });
+    }
     const title = clean(input.title, 5, 160);
     const description = clean(input.description, 10, 5000);
     const entityId = clean(input.entity_id, 0, 255, true);
     const area = clean(input.area || 'Smart Home', 2, 100);
-    const sourceReference = clean(input.source_reference, 0, 255, true);
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data, error } = await supabase.rpc('create_ha_ticket', { p_title: title, p_description: description, p_entity_id: entityId, p_area: area, p_created_by: ownerId, p_source_reference: sourceReference });
     if (error) throw error;
     return response(201, { ok: true, ticketId: data });

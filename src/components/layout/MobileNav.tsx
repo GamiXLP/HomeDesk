@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BookOpen, Bot, CalendarDays, Columns3, Home, Inbox, LogOut, Menu, Plus, Settings, Shield, Sparkles, X } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, Bot, CalendarDays, Columns3, Cpu, Home, Inbox, LogOut, Menu, Plus, Settings, Shield, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -68,6 +68,7 @@ export function MobileNav() {
                 <SheetLink to="/app/calendar" icon={CalendarDays} label="Kalender" onClick={() => setMoreOpen(false)} />
                 <SheetLink to="/app/inbox" icon={Bell} label="Activity Hub" onClick={() => setMoreOpen(false)} />
                 <SheetLink to="/app/knowledge" icon={BookOpen} label="Wissensbasis" onClick={() => setMoreOpen(false)} />
+                <SheetLink to="/app/assets" icon={Cpu} label="Home Operations" onClick={() => setMoreOpen(false)} />
                 <SheetLink to="/app/settings" icon={Settings} label="Einstellungen" onClick={() => setMoreOpen(false)} />
                 {isAdmin && <><SheetLink to="/app/automations" icon={Bot} label="Automation Studio" onClick={() => setMoreOpen(false)} /><SheetLink to="/app/admin" icon={Shield} label="Administration" onClick={() => setMoreOpen(false)} /></>}
                 <button type="button" onClick={() => void logout()} className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"><LogOut size={18} />Abmelden</button>
