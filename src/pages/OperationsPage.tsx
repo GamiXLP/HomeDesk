@@ -1,0 +1,119 @@
+import { AlertTriangle, ArrowRight, Bell, BookOpen, Bot, CalendarDays, CheckCircle2, Clock3, Columns3, Flame, Play, Plus, Search, Sparkles, UserRound, WandSparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { useToast } from '../components/ui/Toast';
+import { statusLabels } from '../constants/tickets';
+import { useAuth } from '../hooks/useAuth';
+import { useTickets } from '../hooks/useTickets';
+import { supabase } from '../lib/supabase';
+import { updateTicketAdmin } from '../lib/tickets';
+import type { Ticket, TicketStatus } from '../types/database';
+import { cn } from '../utils/cn';
+import { isTicketOpen, relativeTime, ticketPath, ticketReference } from '../utils/tickets';
+
+type Mode = 'work' | 'board' | 'calendar' | 'inbox' | 'knowledge' | 'automations';
+const modeByPath: Record<string, Mode> = { '/app/work': 'work', '/app/board': 'board', '/app/calendar': 'calendar', '/app/inbox': 'inbox', '/app/knowledge': 'knowledge', '/app/automations': 'automations' };
+
+export function OperationsPage() {
+  const mode = modeByPath[useLocation().pathname] ?? 'work';
+  const { tickets, unreadTicketIds, markRead, replaceTicket } = useTickets();
+  const { user, isAdmin } = useAuth();
+  const { showToast } = useToast();
+  const [query, setQuery] = useState('');
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return !q ? tickets : tickets.filter((ticket) => `${ticketReference(ticket)} ${ticket.title} ${ticket.description} ${ticket.area} ${ticket.solution_summary ?? ''} ${ticket.root_cause ?? ''}`.toLowerCase().includes(q));
+  }, [query, tickets]);
+
+  async function changeStatus(ticket: Ticket, status: TicketStatus) {
+    if (!isAdmin || ticket.status === status) return;
+    try { const next = await updateTicketAdmin(ticket.id, { status }, ticket); replaceTicket(next); showToast('Status aktualisiert'); }
+    catch (error) { showToast('Status konnte nicht geändert werden', { message: error instanceof Error ? error.message : undefined, tone: 'error' }); }
+  }
+
+  const titles: Record<Mode, [string, string, string]> = {
+    work: ['Mein Fokus', 'Was jetzt zählt', 'Persönliche Queue aus Zuweisungen, Fälligkeiten und Prioritäten.'],
+    board: ['Flow Board', 'Arbeit im Fluss', 'Tickets visuell durch den Lebenszyklus bewegen.'],
+    calendar: ['Planung', 'Fälligkeiten im Kalender', 'Alle Termine und überfälligen Aufgaben in einer Zeitleiste.'],
+    inbox: ['Activity Hub', 'Deine Inbox', 'Ungelesene Änderungen und Eskalationen an einem Ort.'],
+    knowledge: ['Resolution Library', 'Wissen, das bleibt', 'Gelöste Probleme, Ursachen und wiederverwendbare Lösungen.'],
+    automations: ['Automation Studio', 'HomeDesk arbeitet mit', 'Wiederholungen, Eskalationen und Smart-Home-Regeln überwachen.'],
+  };
+  const [kicker, title, subtitle] = titles[mode];
+
+  return <div className="space-y-5 sm:space-y-7">
+    <section className="v3-hero relative overflow-hidden rounded-[30px] p-5 text-white sm:p-8">
+      <div className="absolute -right-10 -top-20 h-64 w-64 rounded-full bg-cyan-300/20 blur-3xl" />
+      <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div><p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[.18em] text-cyan-200"><Sparkles size={14} />{kicker}</p><h2 className="mt-2 text-3xl font-black tracking-[-.04em] sm:text-5xl">{title}</h2><p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">{subtitle}</p></div>
+        {mode !== 'automations' && <label className="relative block min-w-0 md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="In dieser Ansicht suchen …" className="h-12 w-full rounded-2xl border border-white/10 bg-white/10 pl-11 pr-4 text-sm text-white outline-none backdrop-blur placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-4 focus:ring-cyan-400/10" /></label>}
+      </div>
+    </section>
+
+    {mode === 'work' && <WorkView tickets={visible} userId={user?.id} />}
+    {mode === 'board' && <BoardView tickets={visible} isAdmin={isAdmin} onStatus={changeStatus} />}
+    {mode === 'calendar' && <CalendarView tickets={visible} />}
+    {mode === 'inbox' && <InboxView tickets={visible} unreadIds={unreadTicketIds} onRead={markRead} />}
+    {mode === 'knowledge' && <KnowledgeView tickets={visible} />}
+    {mode === 'automations' && <AutomationView tickets={tickets} isAdmin={isAdmin} />}
+  </div>;
+}
+
+function WorkView({ tickets, userId }: { tickets: Ticket[]; userId?: string }) {
+  const now = Date.now();
+  const open = tickets.filter(isTicketOpen);
+  const queue = [...open].sort((a, b) => attentionScore(b, userId, now) - attentionScore(a, userId, now));
+  const mine = open.filter((ticket) => ticket.assigned_to === userId);
+  const overdue = open.filter((ticket) => ticket.due_at && new Date(ticket.due_at).getTime() < now);
+  return <>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><Metric icon={UserRound} label="Mir zugewiesen" value={mine.length} tone="sky" /><Metric icon={Clock3} label="Überfällig" value={overdue.length} tone="red" /><Metric icon={Flame} label="Hohe Priorität" value={open.filter((t) => t.priority === 'urgent' || t.priority === 'high').length} tone="orange" /><Metric icon={CheckCircle2} label="Diese Woche erledigt" value={tickets.filter((t) => t.status === 'done' && t.closed_at && now - new Date(t.closed_at).getTime() < 604800000).length} tone="emerald" /></div>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,.7fr)]"><Card className="p-3 sm:p-5"><SectionTitle title="Intelligente Arbeitsqueue" subtitle="Sortiert nach Fälligkeit, Eskalation und Priorität" />{queue.length ? <div className="mt-4 space-y-2">{queue.slice(0, 10).map((ticket, index) => <QueueRow key={ticket.id} ticket={ticket} index={index + 1} />)}</div> : <Empty text="Alles erledigt – deine Queue ist leer." />}</Card><Card className="overflow-hidden bg-slate-950 p-5 text-white dark:bg-gradient-to-br dark:from-slate-900 dark:to-indigo-950"><WandSparkles className="text-cyan-300" /><h3 className="mt-5 text-xl font-black">Nächster sinnvoller Schritt</h3>{queue[0] ? <><p className="mt-2 text-sm leading-6 text-slate-300">Starte mit <strong className="text-white">{ticketReference(queue[0])}</strong>. {reasonFor(queue[0], userId)}</p><Link className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-cyan-300" to={ticketPath(queue[0])}>Ticket öffnen <ArrowRight size={16} /></Link></> : <p className="mt-2 text-sm text-slate-300">Heute ist nichts Dringendes offen.</p>}</Card></div>
+  </>;
+}
+
+const boardColumns: Array<{ status: TicketStatus; title: string; color: string }> = [
+  { status: 'new', title: 'Eingang', color: 'bg-sky-500' }, { status: 'planned', title: 'Geplant', color: 'bg-indigo-500' }, { status: 'in_progress', title: 'In Arbeit', color: 'bg-orange-500' }, { status: 'waiting_feedback', title: 'Wartet', color: 'bg-violet-500' }, { status: 'tested', title: 'Test', color: 'bg-cyan-500' }, { status: 'done', title: 'Erledigt', color: 'bg-emerald-500' },
+];
+function BoardView({ tickets, isAdmin, onStatus }: { tickets: Ticket[]; isAdmin: boolean; onStatus: (ticket: Ticket, status: TicketStatus) => void }) {
+  return <div className="no-scrollbar grid snap-x snap-mandatory grid-flow-col auto-cols-[86%] gap-3 overflow-x-auto pb-4 sm:auto-cols-[360px] xl:auto-cols-[minmax(260px,1fr)] xl:grid-flow-row xl:grid-cols-3 2xl:grid-cols-6">{boardColumns.map((column) => { const items = tickets.filter((ticket) => ticket.status === column.status || (column.status === 'waiting_feedback' && ticket.status === 'waiting_parts')); return <section key={column.status} onDragOver={(event) => isAdmin && event.preventDefault()} onDrop={(event) => { const id = event.dataTransfer.getData('ticket/id'); const ticket = tickets.find((item) => item.id === id); if (ticket) void onStatus(ticket, column.status); }} className="min-h-[420px] snap-start rounded-[26px] border border-slate-200/80 bg-slate-100/70 p-2.5 dark:border-slate-800 dark:bg-slate-900/50"><div className="flex items-center gap-2 px-2 py-2"><span className={cn('h-2.5 w-2.5 rounded-full', column.color)} /><h3 className="flex-1 text-xs font-black uppercase tracking-[.12em] text-slate-600 dark:text-slate-300">{column.title}</h3><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-500 dark:bg-slate-800">{items.length}</span></div><div className="mt-1 space-y-2">{items.map((ticket) => <BoardCard key={ticket.id} ticket={ticket} draggable={isAdmin} />)}</div></section>; })}</div>;
+}
+
+function CalendarView({ tickets }: { tickets: Ticket[] }) {
+  const dated = tickets.filter((ticket) => ticket.due_at).sort((a, b) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime());
+  const groups = new Map<string, Ticket[]>();
+  for (const ticket of dated) { const key = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date(ticket.due_at!)); groups.set(key, [...(groups.get(key) ?? []), ticket]); }
+  return <div className="grid gap-4 xl:grid-cols-[320px_1fr]"><Card className="h-fit bg-gradient-to-br from-indigo-600 to-sky-500 p-6 text-white"><CalendarDays size={27} /><p className="mt-8 text-5xl font-black">{dated.length}</p><p className="mt-1 text-sm text-sky-100">geplante Fälligkeiten</p><p className="mt-6 text-xs leading-5 text-sky-100/80">Tickets ohne Termin bleiben in „Mein Fokus“ sichtbar und können in der Detailansicht geplant werden.</p></Card><div className="space-y-4">{groups.size ? [...groups].map(([date, items]) => <div key={date}><div className="sticky top-20 z-10 mb-2 inline-flex rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white dark:bg-white dark:text-slate-900">{date}</div><Card className="divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">{items.map((ticket) => <QueueRow key={ticket.id} ticket={ticket} />)}</Card></div>) : <Empty text="Noch keine Fälligkeiten geplant." />}</div></div>;
+}
+
+function InboxView({ tickets, unreadIds, onRead }: { tickets: Ticket[]; unreadIds: Set<string>; onRead: (id: string) => Promise<void> }) {
+  const items = [...tickets].filter((ticket) => unreadIds.has(ticket.id) || ticket.escalation_level).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  return <Card className="overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800 sm:p-6"><SectionTitle title="Activity Feed" subtitle={`${unreadIds.size} ungelesene Änderungen`} /><Button variant="secondary" size="sm" onClick={() => void Promise.all([...unreadIds].map(onRead))}><CheckCircle2 size={15} />Alle gelesen</Button></div>{items.length ? <div className="divide-y divide-slate-100 dark:divide-slate-800">{items.map((ticket) => <Link key={ticket.id} to={ticketPath(ticket)} onClick={() => void onRead(ticket.id)} className="group flex gap-3 p-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/60 sm:p-5"><span className={cn('mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl', ticket.escalation_level ? 'bg-red-50 text-red-500 dark:bg-red-950/50' : 'bg-sky-50 text-sky-500 dark:bg-sky-950/50')}>{ticket.escalation_level ? <AlertTriangle size={18} /> : <Bell size={18} />}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black text-slate-400">{ticketReference(ticket)}</span><StatusBadge status={ticket.status} />{unreadIds.has(ticket.id) && <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[9px] font-black uppercase text-white">Neu</span>}</div><p className="mt-1.5 truncate text-sm font-black text-slate-900 dark:text-white">{ticket.title}</p><p className="mt-1 text-xs text-slate-500">{ticket.escalation_level ? `Eskalationsstufe ${ticket.escalation_level} · ` : ''}{relativeTime(ticket.updated_at)}</p></div><ArrowRight className="self-center text-slate-300 transition group-hover:translate-x-1" size={17} /></Link>)}</div> : <Empty text="Deine Inbox ist aufgeräumt." />}</Card>;
+}
+
+function KnowledgeView({ tickets }: { tickets: Ticket[] }) {
+  const solved = tickets.filter((ticket) => ticket.solution_summary || ticket.resolution_steps || ticket.root_cause);
+  return <><div className="grid gap-3 sm:grid-cols-3"><Metric icon={BookOpen} label="Dokumentierte Lösungen" value={solved.length} tone="sky" /><Metric icon={CheckCircle2} label="Gelöste Tickets" value={tickets.filter((t) => t.status === 'done').length} tone="emerald" /><Metric icon={Sparkles} label="Wiederverwendbar" value={solved.filter((t) => t.resolution_steps).length} tone="violet" /></div>{solved.length ? <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{solved.map((ticket) => <Link key={ticket.id} to={ticketPath(ticket)}><Card className="group h-full overflow-hidden p-5 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl dark:hover:border-indigo-800"><div className="flex items-center justify-between"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">{ticket.category}</span><span className="text-[10px] font-bold text-slate-400">{ticketReference(ticket)}</span></div><h3 className="mt-4 text-lg font-black tracking-tight text-slate-950 dark:text-white">{ticket.title}</h3>{ticket.solution_summary && <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{ticket.solution_summary}</p>}{ticket.root_cause && <div className="mt-4 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/70"><p className="text-[9px] font-black uppercase tracking-wide text-slate-400">Ursache</p><p className="mt-1 line-clamp-2 text-xs text-slate-600 dark:text-slate-300">{ticket.root_cause}</p></div>}</Card></Link>)}</div> : <Empty text="Noch keine Lösung dokumentiert. Schließe ein Ticket mit Lösungsdokumentation ab." />}</>;
+}
+
+type Rule = { id: string; name: string; trigger_type: string; enabled: boolean; conditions: Record<string, unknown>; actions: unknown[] };
+function AutomationView({ tickets, isAdmin }: { tickets: Ticket[]; isAdmin: boolean }) {
+  const { showToast } = useToast(); const [rules, setRules] = useState<Rule[]>([]); const [recurrences, setRecurrences] = useState(0); const [loading, setLoading] = useState(true);
+  async function load() { setLoading(true); const [ruleResult, recurrenceResult] = await Promise.all([supabase.from('automation_rules').select('*').order('created_at'), supabase.from('ticket_recurrences').select('id', { count: 'exact', head: true }).eq('active', true)]); if (!ruleResult.error) setRules((ruleResult.data ?? []) as Rule[]); setRecurrences(recurrenceResult.count ?? 0); setLoading(false); }
+  useEffect(() => { if (isAdmin) void load(); }, [isAdmin]);
+  async function seedDefaults() { const defaults = [{ name: 'Überfällige Tickets eskalieren', trigger_type: 'schedule', conditions: { overdue: true }, actions: [{ type: 'escalate' }, { type: 'push' }] }, { name: 'Home Assistant: Entity nicht verfügbar', trigger_type: 'home_assistant', conditions: { state: 'unavailable' }, actions: [{ type: 'create_ticket' }] }, { name: 'Beobachter bei Änderungen informieren', trigger_type: 'ticket_updated', conditions: {}, actions: [{ type: 'push_watchers' }] }]; const { error } = await supabase.from('automation_rules').insert(defaults); if (error) showToast('Regeln konnten nicht angelegt werden', { message: error.message, tone: 'error' }); else { showToast('Starter-Regeln angelegt'); await load(); } }
+  async function toggle(rule: Rule) { const { error } = await supabase.from('automation_rules').update({ enabled: !rule.enabled }).eq('id', rule.id); if (error) showToast('Änderung fehlgeschlagen', { tone: 'error' }); else await load(); }
+  if (!isAdmin) return <Empty text="Das Automation Studio ist für Administratoren verfügbar." />;
+  return <><div className="grid gap-3 sm:grid-cols-3"><Metric icon={Bot} label="Aktive Regeln" value={rules.filter((r) => r.enabled).length} tone="violet" /><Metric icon={Clock3} label="Wiederholungen" value={recurrences} tone="sky" /><Metric icon={AlertTriangle} label="Eskalierte Tickets" value={tickets.filter((t) => t.escalation_level).length} tone="red" /></div><Card className="p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle title="Regelwerk" subtitle="Automationen zentral steuern und nachvollziehen" />{rules.length === 0 && <Button onClick={() => void seedDefaults()}><Plus size={16} />Starter-Regeln</Button>}</div>{loading ? <p className="mt-6 text-sm text-slate-400">Automationen werden geladen …</p> : <div className="mt-5 grid gap-3 lg:grid-cols-2">{rules.map((rule) => <div key={rule.id} className="rounded-[24px] border border-slate-200 p-4 dark:border-slate-700"><div className="flex items-start gap-3"><span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl', rule.enabled ? 'bg-violet-50 text-violet-500 dark:bg-violet-950/60' : 'bg-slate-100 text-slate-400 dark:bg-slate-800')}><Bot size={20} /></span><div className="min-w-0 flex-1"><p className="font-black text-slate-900 dark:text-white">{rule.name}</p><p className="mt-1 text-xs text-slate-500">Trigger: {rule.trigger_type} · {rule.actions?.length ?? 0} Aktionen</p></div><button onClick={() => void toggle(rule)} className={cn('relative h-6 w-11 rounded-full transition', rule.enabled ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700')}><span className={cn('absolute top-1 h-4 w-4 rounded-full bg-white shadow transition', rule.enabled ? 'left-6' : 'left-1')} /></button></div><button className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-400" onClick={() => showToast('Test vorbereitet', { message: 'Die Regel wird beim nächsten passenden Ereignis ausgewertet.', tone: 'info' })}><Play size={13} />Testlauf</button></div>)}</div>}</Card></>;
+}
+
+function BoardCard({ ticket, draggable }: { ticket: Ticket; draggable: boolean }) { return <Link draggable={draggable} onDragStart={(event) => { event.dataTransfer.setData('ticket/id', ticket.id); event.dataTransfer.effectAllowed = 'move'; }} to={ticketPath(ticket)} className="block rounded-2xl border border-white bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700 dark:bg-slate-800"><div className="flex items-center justify-between"><span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{ticketReference(ticket)}</span><PriorityBadge priority={ticket.priority} /></div><p className="mt-2 text-sm font-black leading-5 text-slate-900 dark:text-white">{ticket.title}</p><div className="mt-3 flex items-center justify-between text-[10px] font-semibold text-slate-400"><span>{ticket.area}</span>{ticket.due_at && <span className={new Date(ticket.due_at).getTime() < Date.now() ? 'text-red-500' : ''}>{new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(new Date(ticket.due_at))}</span>}</div></Link>; }
+function QueueRow({ ticket, index }: { ticket: Ticket; index?: number }) { return <Link to={ticketPath(ticket)} className="group flex items-center gap-3 rounded-2xl p-3 transition hover:bg-slate-50 dark:hover:bg-slate-800/60">{index && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-500 dark:bg-slate-800">{index}</span>}<div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="text-[9px] font-black uppercase tracking-wide text-slate-400">{ticketReference(ticket)}</span><StatusBadge status={ticket.status} /></div><p className="mt-1 truncate text-sm font-black text-slate-900 dark:text-white">{ticket.title}</p><p className="mt-1 text-[11px] text-slate-500">{ticket.area}{ticket.due_at ? ` · fällig ${new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' }).format(new Date(ticket.due_at))}` : ''}</p></div><PriorityBadge priority={ticket.priority} /><ArrowRight className="hidden text-slate-300 transition group-hover:translate-x-1 sm:block" size={16} /></Link>; }
+function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bell; label: string; value: number; tone: 'sky' | 'red' | 'orange' | 'emerald' | 'violet' }) { const tones = { sky: 'from-sky-500 to-cyan-400', red: 'from-red-500 to-rose-400', orange: 'from-orange-500 to-amber-400', emerald: 'from-emerald-500 to-teal-400', violet: 'from-violet-500 to-indigo-500' }; return <Card className="relative overflow-hidden p-4 sm:p-5"><div className={cn('absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br opacity-10 blur-xl', tones[tone])} /><span className={cn('flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg', tones[tone])}><Icon size={18} /></span><p className="mt-5 text-3xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p><p className="mt-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">{label}</p></Card>; }
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) { return <div><h3 className="text-lg font-black tracking-tight text-slate-950 dark:text-white">{title}</h3><p className="mt-1 text-xs text-slate-500">{subtitle}</p></div>; }
+function Empty({ text }: { text: string }) { return <Card className="p-10 text-center"><CheckCircle2 className="mx-auto text-emerald-500" size={28} /><p className="mt-3 text-sm font-bold text-slate-500">{text}</p></Card>; }
+function attentionScore(ticket: Ticket, userId: string | undefined, now: number) { let score = { urgent: 50, high: 30, normal: 10, low: 0 }[ticket.priority] + (ticket.escalation_level ?? 0) * 30; if (ticket.assigned_to === userId) score += 12; if (ticket.due_at) score += new Date(ticket.due_at).getTime() < now ? 40 : Math.max(0, 15 - Math.floor((new Date(ticket.due_at).getTime() - now) / 86400000)); return score; }
+function reasonFor(ticket: Ticket, userId?: string) { if (ticket.escalation_level) return `Es ist auf Eskalationsstufe ${ticket.escalation_level}.`; if (ticket.due_at && new Date(ticket.due_at).getTime() < Date.now()) return 'Die Fälligkeit ist überschritten.'; if (ticket.priority === 'urgent') return 'Es besitzt die höchste Priorität.'; if (ticket.assigned_to === userId) return 'Es ist dir direkt zugewiesen.'; return 'Es hat aktuell den höchsten Attention Score.'; }

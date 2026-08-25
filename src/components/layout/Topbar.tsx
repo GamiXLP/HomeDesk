@@ -6,12 +6,19 @@ import { cn } from '../../utils/cn';
 import { isTicketOpen, relativeTime, sortTicketsByAttention, ticketPath, ticketReference } from '../../utils/tickets';
 import { PriorityBadge, StatusBadge } from '../ui/Badge';
 import { ThemeToggle } from './ThemeToggle';
+import { statusLabels } from '../../constants/tickets';
 
 const titles: Record<string, string> = {
   '/app/dashboard': 'Übersicht',
   '/app/tickets': 'Tickets',
   '/app/tickets/new': 'Neues Ticket',
   '/app/statistics': 'Statistik',
+  '/app/work': 'Mein Fokus',
+  '/app/board': 'Flow Board',
+  '/app/calendar': 'Kalender',
+  '/app/inbox': 'Activity Hub',
+  '/app/knowledge': 'Wissensbasis',
+  '/app/automations': 'Automation Studio',
   '/app/settings': 'Einstellungen',
   '/app/admin': 'Admin',
 };
@@ -58,12 +65,16 @@ export function Topbar() {
   const searchResults = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return tickets.slice(0, 8);
+    const tokens = normalized.split(/\s+/);
     return tickets
-      .filter((ticket) =>
-        `${ticketReference(ticket)} ${ticket.ticket_number ?? ''} ${ticket.title} ${ticket.description} ${ticket.category} ${ticket.area} ${ticket.device ?? ''}`
-          .toLowerCase()
-          .includes(normalized),
-      )
+      .filter((ticket) => tokens.every((token) => {
+        const [operator, value] = token.includes(':') ? token.split(/:(.*)/s) : ['', token];
+        if (operator === 'status') return value === 'offen' ? isTicketOpen(ticket) : value === 'geschlossen' ? !isTicketOpen(ticket) : ticket.status === value || statusLabels[ticket.status].toLowerCase().includes(value);
+        if (operator === 'bereich') return ticket.area.toLowerCase().includes(value);
+        if (operator === 'prio') return ticket.priority === value || ({ niedrig: 'low', normal: 'normal', hoch: 'high', dringend: 'urgent' }[value] === ticket.priority);
+        if (operator === 'fällig') return value === 'heute' ? Boolean(ticket.due_at && new Date(ticket.due_at).toDateString() === new Date().toDateString()) : value === 'überfällig' ? Boolean(ticket.due_at && new Date(ticket.due_at).getTime() < Date.now() && isTicketOpen(ticket)) : true;
+        return `${ticketReference(ticket)} ${ticket.ticket_number ?? ''} ${ticket.title} ${ticket.description} ${ticket.category} ${ticket.area} ${ticket.device ?? ''} ${ticket.entity_id ?? ''} ${ticket.solution_summary ?? ''} ${ticket.root_cause ?? ''} ${ticket.resolution_steps ?? ''}`.toLowerCase().includes(value);
+      }))
       .slice(0, 12);
   }, [query, tickets]);
 
@@ -204,7 +215,7 @@ export function Topbar() {
                 ref={searchInputRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Titel, Bereich, Gerät, Kategorie oder Ticketnummer …"
+                placeholder="Suche oder status:offen · bereich:küche · prio:dringend …"
                 className="h-16 min-w-0 flex-1 border-0 bg-transparent px-0 text-base outline-none focus:ring-0 dark:bg-transparent sm:h-[72px]"
               />
               <button onClick={() => setSearchOpen(false)} className="rounded-xl bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-800">ESC</button>

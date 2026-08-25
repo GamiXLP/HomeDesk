@@ -1,5 +1,10 @@
 import {
   BarChart3,
+  Bell,
+  BookOpen,
+  Bot,
+  CalendarDays,
+  Columns3,
   Home,
   Inbox,
   LogOut,
@@ -16,7 +21,12 @@ import { cn } from '../../utils/cn';
 
 const nav = [
   { to: '/app/dashboard', label: 'Übersicht', icon: Home },
+  { to: '/app/work', label: 'Mein Fokus', icon: Sparkles },
   { to: '/app/tickets', label: 'Tickets', icon: Inbox },
+  { to: '/app/board', label: 'Flow Board', icon: Columns3 },
+  { to: '/app/calendar', label: 'Kalender', icon: CalendarDays },
+  { to: '/app/inbox', label: 'Activity Hub', icon: Bell },
+  { to: '/app/knowledge', label: 'Wissen', icon: BookOpen },
   { to: '/app/statistics', label: 'Statistik', icon: BarChart3 },
   { to: '/app/settings', label: 'Einstellungen', icon: Settings },
 ];
@@ -46,7 +56,7 @@ export function Sidebar() {
             <p className="text-base font-black tracking-tight text-slate-950 dark:text-white">HomeDesk</p>
             <Sparkles size={13} className="text-sky-500" />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Smart Home Support · 2.1</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Intelligent Home Ops · 3.0</p>
         </div>
       </div>
 
@@ -60,7 +70,7 @@ export function Sidebar() {
         </NavLink>
       </div>
 
-      <nav className="mt-5 flex-1 space-y-1 px-4">
+      <nav className="mt-5 flex-1 space-y-1 overflow-y-auto px-4 pb-3">
         {nav.map((item) => (
           <NavLink key={item.to} to={item.to} className={navLinkClass}>
             <item.icon size={18} className="shrink-0" />
@@ -74,10 +84,7 @@ export function Sidebar() {
         ))}
 
         {isAdmin && (
-          <NavLink to="/app/admin" className={navLinkClass}>
-            <Shield size={18} />
-            <span className="flex-1">Admin</span>
-          </NavLink>
+          <><NavLink to="/app/automations" className={navLinkClass}><Bot size={18} /><span className="flex-1">Automationen</span></NavLink><NavLink to="/app/admin" className={navLinkClass}><Shield size={18} /><span className="flex-1">Admin</span></NavLink></>
         )}
       </nav>
 

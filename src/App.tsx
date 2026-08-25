@@ -24,6 +24,7 @@ const StatisticsPage = lazy(() =>
 );
 const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const OperationsPage = lazy(() => import('./pages/OperationsPage').then((module) => ({ default: module.OperationsPage })));
 
 function PageFallback() {
   return (
@@ -54,12 +55,18 @@ export function App() {
             <Route path="tickets/:id" element={<TicketDetailPage />} />
             <Route path="areas" element={<Navigate to="/app/tickets" replace />} />
             <Route path="statistics" element={<StatisticsPage />} />
+            <Route path="work" element={<OperationsPage />} />
+            <Route path="board" element={<OperationsPage />} />
+            <Route path="calendar" element={<OperationsPage />} />
+            <Route path="inbox" element={<OperationsPage />} />
+            <Route path="knowledge" element={<OperationsPage />} />
             <Route path="settings" element={<SettingsPage />} />
 
             <Route element={<AdminRoute />}>
               <Route path="admin" element={<AdminPage />} />
               <Route path="admin/users" element={<AdminPage />} />
               <Route path="admin/tickets" element={<Navigate to="/app/tickets" replace />} />
+              <Route path="automations" element={<OperationsPage />} />
             </Route>
           </Route>
         </Route>

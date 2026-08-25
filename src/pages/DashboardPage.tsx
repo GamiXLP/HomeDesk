@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot, Clock3, Flame, Plus, Sparkles, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bell, BookOpen, CalendarDays, CheckCircle2, CircleDot, Clock3, Columns3, Flame, Plus, Sparkles, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AreaTile } from '../components/dashboard/AreaTile';
@@ -27,6 +27,7 @@ export function DashboardPage() {
       waiting: tickets.filter((ticket) => ticket.status.startsWith('waiting')).length,
       done,
       high: openTickets.filter((ticket) => ['high', 'urgent'].includes(ticket.priority)).length,
+      overdue: openTickets.filter((ticket) => ticket.due_at && new Date(ticket.due_at).getTime() < Date.now()).length,
       new: tickets.filter((ticket) => ticket.status === 'new').length,
       attention: sortTicketsByAttention(openTickets).slice(0, 5),
       completion: tickets.length ? Math.round((done / tickets.length) * 100) : 100,
@@ -45,30 +46,37 @@ export function DashboardPage() {
 
   return (
     <div className="min-w-0 space-y-5 sm:space-y-7 2xl:space-y-8">
-      <section className="relative min-w-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white px-4 py-5 text-slate-950 shadow-xl shadow-slate-200/40 transition-colors dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:shadow-slate-950/30 sm:rounded-[34px] sm:px-8 sm:py-9 xl:px-10 xl:py-10">
+      <section className="v3-hero relative min-w-0 overflow-hidden rounded-[30px] px-4 py-6 text-white sm:rounded-[36px] sm:px-8 sm:py-10 xl:px-10 xl:py-12">
         <div className="absolute -right-20 -top-28 h-80 w-80 rounded-full bg-sky-400/15 blur-3xl dark:bg-sky-500/30" />
         <div className="absolute -bottom-32 right-1/3 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl dark:bg-cyan-400/20" />
         <div className="relative grid min-w-0 gap-5 sm:gap-7 xl:grid-cols-[minmax(0,1fr)_430px] xl:items-end">
           <div className="min-w-0 max-w-3xl">
-            <div className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-600 dark:text-sky-300 sm:text-xs sm:tracking-[0.18em]"><Sparkles size={13} className="shrink-0" /><span className="truncate">Smart Home Command Center</span></div>
-            <h2 className="mt-2 break-words text-[28px] font-black leading-[1.05] tracking-tight sm:mt-3 sm:text-4xl xl:text-[42px]">Hallo {friendlyDisplayName(profile?.display_name)} 👋</h2>
-            <p className="mt-2 max-w-2xl text-[13px] leading-5 text-slate-600 dark:text-slate-300 sm:mt-3 sm:text-base sm:leading-6">
+            <div className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-200 sm:text-xs sm:tracking-[0.18em]"><Sparkles size={13} className="shrink-0" /><span className="truncate">Home Operations · Intelligence Layer</span></div>
+            <h2 className="mt-2 break-words text-[30px] font-black leading-[1.02] tracking-[-.045em] sm:mt-3 sm:text-5xl xl:text-[52px]">Hallo {friendlyDisplayName(profile?.display_name)}.</h2>
+            <p className="mt-3 max-w-2xl text-[13px] leading-5 text-slate-300 sm:text-base sm:leading-6">
               {stats.open === 0
                 ? 'Im Moment ist alles erledigt. Das Smart Home hat heute nichts zu meckern.'
                 : `${stats.open} ${stats.open === 1 ? 'Thema ist' : 'Themen sind'} noch offen. ${stats.high > 0 ? `${stats.high} davon ${stats.high === 1 ? 'hat' : 'haben'} hohe Priorität.` : 'Nichts davon ist aktuell kritisch.'}`}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:flex sm:flex-wrap">
-              <Link to="/app/tickets?scope=open" className="min-w-0"><Button variant="secondary" className="w-full border-slate-200 bg-slate-100 px-3 text-slate-900 hover:bg-slate-200 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15 sm:w-auto sm:px-4">Offene Tickets <ArrowRight size={15} /></Button></Link>
+              <Link to="/app/work" className="min-w-0"><Button variant="secondary" className="w-full border-white/10 bg-white/10 px-3 text-white hover:bg-white/15 dark:border-white/10 dark:bg-white/10 dark:text-white sm:w-auto sm:px-4">Fokus öffnen <ArrowRight size={15} /></Button></Link>
               <Link to="/app/tickets/new" className="min-w-0"><Button className="w-full px-3 sm:w-auto sm:px-4"><Plus size={16} />Neues Ticket</Button></Link>
             </div>
           </div>
 
-          <div className="grid min-w-0 grid-cols-3 gap-1.5 rounded-3xl border border-slate-200 bg-slate-50/80 p-2 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.07] dark:shadow-none sm:gap-2 sm:p-3">
+          <div className="grid min-w-0 grid-cols-3 gap-1.5 rounded-3xl border border-white/10 bg-white/[0.07] p-2 backdrop-blur sm:gap-2 sm:p-3">
             <HeroMetric label="Ungelesen" value={unreadCount} />
             <HeroMetric label="Abschluss" value={`${stats.completion}%`} />
             <HeroMetric label="Kritisch" value={stats.high} />
           </div>
         </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <CommandTile to="/app/board" icon={Columns3} title="Flow Board" text="Tickets bewegen" tone="from-indigo-500 to-violet-500" />
+        <CommandTile to="/app/calendar" icon={CalendarDays} title="Planung" text={`${stats.overdue} überfällig`} tone="from-orange-500 to-rose-500" />
+        <CommandTile to="/app/inbox" icon={Bell} title="Activity Hub" text={`${unreadCount} ungelesen`} tone="from-sky-500 to-cyan-400" />
+        <CommandTile to="/app/knowledge" icon={BookOpen} title="Wissensbasis" text="Lösungen finden" tone="from-emerald-500 to-teal-400" />
       </section>
 
       <section className="grid min-w-0 grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 2xl:grid-cols-6">
@@ -123,5 +131,9 @@ export function DashboardPage() {
 }
 
 function HeroMetric({ label, value }: { label: string; value: number | string }) {
-  return <div className="min-w-0 rounded-2xl bg-white px-1.5 py-2.5 text-center shadow-sm dark:bg-white/[0.06] dark:shadow-none sm:px-3 sm:py-3"><p className="truncate text-lg font-black tracking-tight text-slate-950 dark:text-white sm:text-xl">{value}</p><p className="mt-0.5 truncate text-[8px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 sm:text-[10px]">{label}</p></div>;
+  return <div className="min-w-0 rounded-2xl bg-white/[0.08] px-1.5 py-2.5 text-center sm:px-3 sm:py-3"><p className="truncate text-lg font-black tracking-tight text-white sm:text-xl">{value}</p><p className="mt-0.5 truncate text-[8px] font-bold uppercase tracking-wide text-slate-300 sm:text-[10px]">{label}</p></div>;
+}
+
+function CommandTile({ to, icon: Icon, title, text, tone }: { to: string; icon: typeof Bell; title: string; text: string; tone: string }) {
+  return <Link to={to} className="group relative overflow-hidden rounded-[24px] border border-white bg-white p-4 shadow-card transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:p-5"><div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br ${tone} opacity-10 blur-xl transition group-hover:opacity-20`} /><span className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br ${tone} text-white shadow-lg`}><Icon size={18} /></span><p className="mt-4 text-sm font-black text-slate-950 dark:text-white sm:text-base">{title}</p><p className="mt-1 text-[11px] font-semibold text-slate-400 sm:text-xs">{text}</p></Link>;
 }

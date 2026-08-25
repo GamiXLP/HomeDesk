@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Filter, LayoutList, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Bookmark, CalendarDays, ChevronLeft, ChevronRight, Columns3, Filter, LayoutList, Plus, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { areas, categories, priorityLabels, priorityOptions, statusLabels, statusOptions } from '../../constants/tickets';
@@ -15,6 +15,7 @@ type SortMode = 'updated_desc' | 'updated_asc' | 'priority' | 'created_desc';
 export function TicketList({ tickets }: { tickets: Ticket[] }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [savedSearches, setSavedSearches] = useState<Array<{ name: string; query: string }>>(() => { try { return JSON.parse(localStorage.getItem('homedesk:saved-searches') ?? '[]'); } catch { return []; } });
   const { preferences, updatePreferences } = usePreferences();
   const { unreadTicketIds } = useTickets();
 
@@ -44,6 +45,14 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
 
   function toggleCompact() {
     updatePreferences({ ticketDensity: preferences.ticketDensity === 'compact' ? 'comfortable' : 'compact' });
+  }
+
+  function saveCurrentSearch() {
+    const name = window.prompt('Name für diese Suche:');
+    if (!name?.trim()) return;
+    const next = [...savedSearches.filter((item) => item.name !== name.trim()), { name: name.trim(), query: searchParams.toString() }];
+    setSavedSearches(next);
+    localStorage.setItem('homedesk:saved-searches', JSON.stringify(next));
   }
 
   const filtered = useMemo(() => {
@@ -108,7 +117,7 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
             {filtered.length === 0 ? 'Keine passenden Tickets.' : `${firstShown}–${lastShown} von ${filtered.length} Treffern`} · {tickets.length} insgesamt
           </p>
         </div>
-        <Link to="/app/tickets/new" className="hidden sm:block"><Button><Plus size={17} />Neues Ticket</Button></Link>
+        <div className="hidden items-center gap-2 sm:flex"><Link to="/app/board"><Button variant="secondary" size="sm"><Columns3 size={15} />Board</Button></Link><Link to="/app/calendar"><Button variant="secondary" size="sm"><CalendarDays size={15} />Kalender</Button></Link><Link to="/app/tickets/new"><Button><Plus size={17} />Neues Ticket</Button></Link></div>
       </section>
 
       <section className="ticket-toolbar sticky z-30 min-w-0 rounded-[24px] border border-white/70 bg-white/[0.92] p-2.5 shadow-card backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/[0.92] sm:rounded-3xl sm:p-3">
@@ -133,7 +142,10 @@ export function TicketList({ tickets }: { tickets: Ticket[] }) {
           </Button>
 
           <Button variant="ghost" size="icon" className="shrink-0" onClick={toggleCompact} title="Darstellung wechseln"><LayoutList size={18} /></Button>
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={saveCurrentSearch} title="Suche speichern"><Bookmark size={17} /></Button>
         </div>
+
+        {savedSearches.length > 0 && <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-1 pb-1">{savedSearches.map((saved) => <button key={saved.name} onClick={() => setSearchParams(new URLSearchParams(saved.query))} className="shrink-0 rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300"><Bookmark size={11} className="mr-1 inline" />{saved.name}</button>)}</div>}
 
         {filtersOpen && (
           <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-800">
