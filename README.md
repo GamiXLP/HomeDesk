@@ -1,115 +1,206 @@
 # HomeDesk
 
-Privates Smart-Home-Ticketsystem im Home-Assistant-Stil für zwei Rollen: Admin/Bearbeiter und Benutzerin/Antragstellerin.
+HomeDesk ist ein privates Ticket- und Betriebsportal für Haushalt, Geräte und Home Assistant. Die Anwendung verbindet klassische Tickets mit Automationen, Live-Zuständen, Wartungsplanung, Wissensdokumentation und mobilen Benachrichtigungen.
 
-## HomeDesk 3.0
+Produktionsanwendung: [homedesk-smaragd.netlify.app](https://homedesk-smaragd.netlify.app)
 
-- Supabase Auth Login per E-Mail/Passwort
-- Rollen über `profiles.role`
-- Dashboard mit Statuskarten und Bereichskacheln
-- Ticket erstellen
-- Ticketliste mit Suche und Offen-Filter
-- Ticketdetailseite
-- Kommentare öffentlich/intern
-- Admin kann Status und Priorität ändern
-- PostgreSQL RLS schützt Daten serverseitig
-- Netlify SPA-Deployment vorbereitet
-- Ticket Intelligence mit Unteraufgaben, Fälligkeiten und Beziehungen
-- Lösungsdokumentation und Volltext-nahe Suche über Ticketwissen
-- Beobachter, Eskalationsstufen und wiederkehrende Tickets
-- Home-Assistant-Ticketerstellung über abgesicherte RPC/Edge Function
-- Native Android-Push-Registrierung über Capacitor
+## Funktionsumfang
+
+### Tickets und Zusammenarbeit
+
+- Rollenbasierter Zugriff für Administratoren und Benutzer
+- Ticketnummern im Format `HD-10000000`
+- Status, Prioritäten, Zuweisungen, Fälligkeiten und SLA-Fristen
+- Kommentare, interne Notizen und Bildanhänge
+- Unteraufgaben, Beobachter und wiederkehrende Tickets
+- Ticketbeziehungen: Verknüpfung, Blockierung, Duplikat und Ursache
+- Lösungszusammenfassung, Fehlerursache und dokumentierte Lösungsschritte
+- Freigabedatenmodell für das Vier-Augen-Prinzip
+- automatische Eskalation überfälliger Tickets
+- E-Mail-Benachrichtigungen pro Benutzer deaktivierbar
+
+### Intelligence und Arbeitsoberflächen
+
+- priorisierte Arbeitsqueue mit Attention Score
+- Vorschläge für ähnliche Tickets und Duplikaterkennung
+- Volltext-nahe Suche mit Suchoperatoren und gespeicherten Suchen
+- Flow Board, Fälligkeitskalender und persönlicher Fokus
+- persistentes Benachrichtigungscenter und Activity Hub
+- Lösungsbibliothek für wiederverwendbares Wissen
+- Automation Studio
+
+### Home Operations
+
+- Geräte- und Assetakten mit Hersteller, Modell, Seriennummer und Garantie
+- Verknüpfung von Assets mit Home-Assistant-Entitäten
+- Live-Zustände aus Home Assistant über verschlüsselte OAuth-Tokens
+- Raumansicht, Home Health Score und Wallboard
+- QR-Gerätepass
+- Wartungspläne mit automatischer Ticketerstellung
+- abgesicherter HA-Webhook für automatische Erstellung und Auflösung von Tickets
+
+### Mobile und Benachrichtigungen
+
+- Android-App auf Basis von Capacitor
+- Firebase Cloud Messaging für Android Push
+- Push an Besitzer, Bearbeiter und Beobachter
+- automatischer APK-Build über GitHub Actions
+- E-Mail-Versand über SMTP
 
 ## Architektur
 
-Frontend:
-- React + TypeScript + Vite
-- Tailwind CSS
-- React Router
-- Lucide Icons
-- Recharts für Statistik
+| Bereich | Technik |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Router |
+| Diagramme und UI | Recharts, Lucide Icons |
+| Backend | Supabase Auth, PostgreSQL, Row Level Security und Storage |
+| Serverfunktionen | Netlify Functions |
+| Smart Home | Home-Assistant-OAuth, REST API und Webhook |
+| Android | Capacitor, Firebase Cloud Messaging, Gradle |
+| Deployment | Netlify und GitHub Actions |
 
-Backend:
-- Supabase Auth
-- Supabase PostgreSQL
-- Supabase RLS
-- Supabase Storage vorbereitet für `ticket-attachments`
+## Lokale Entwicklung
 
-## Lokale Installation
+Voraussetzungen: Node.js 22 oder neuer und npm.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
 
-Dann `.env` befüllen:
+Mindestens diese Werte müssen in `.env` gesetzt sein:
 
 ```env
 VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+VITE_HOME_ASSISTANT_URL=https://YOUR_HOME_ASSISTANT_URL
+```
+
+Wichtige Befehle:
+
+```bash
+npm run build
+npm run android:sync
+npx netlify build
 ```
 
 ## Supabase einrichten
 
-1. Neues Supabase-Projekt erstellen.
-2. SQL Editor öffnen.
-3. Inhalt von `supabase/migrations/001_init_homedesk.sql` ausführen.
-4. In Storage einen privaten Bucket erstellen: `ticket-attachments`.
-5. Danach alle weiteren Migrationen bis `006_homedesk_v3.sql` in Reihenfolge ausführen.
-6. Optional `supabase/seed.sql` ausführen.
-7. In Supabase Auth zwei Nutzer anlegen.
-8. In `profiles` deinen Nutzer auf `admin` setzen:
+Das Projekt verwendet die Supabase CLI und versionierte Migrationen. Bei einem neuen, verknüpften Projekt werden alle Migrationen so angewendet:
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
+
+Aktuell gehören die Migrationen `001` bis `009` zum vollständigen Schema. Sie enthalten Profile, Tickets, Kommentare, RLS, Storage, Ticketnummern, Home-Assistant-Identitäten, Ticket Intelligence, Automationen, E-Mail-Präferenzen, Assets, Wartungspläne, SLA, Freigaben und das Benachrichtigungscenter.
+
+Nach dem Anlegen des ersten Auth-Benutzers kann dessen Rolle im SQL Editor gesetzt werden:
 
 ```sql
 update public.profiles
 set role = 'admin', display_name = 'Gerhard'
-where id = 'DEINE_AUTH_USER_UUID';
-
-update public.profiles
-set role = 'user', display_name = 'Samantha'
-where id = 'SAMANTHA_AUTH_USER_UUID';
+where id = 'AUTH_USER_UUID';
 ```
 
-## Wichtiger Hinweis zu Registrierung
+Es gibt bewusst keine öffentliche Registrierung. Benutzer werden über Supabase Auth angelegt.
 
-Im MVP ist keine öffentliche Registrierung verlinkt. Lege Nutzer zuerst manuell in Supabase Auth an. Das passt zu deinem Wunsch: öffentlich erreichbar, aber nur nach Login nutzbar.
+## Netlify-Konfiguration
 
-## Netlify Deployment
+- Build Command: `npm run build`
+- Publish Directory: `dist`
 
-1. Projekt nach GitHub pushen.
-2. Netlify mit dem Repository verbinden.
-3. Build Command: `npm run build`
-4. Publish Directory: `dist`
-5. Environment Variables in Netlify setzen:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-6. `netlify.toml` enthält bereits den SPA-Fallback.
+Öffentliche Build-Variablen:
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_HOME_ASSISTANT_URL
+VITE_API_BASE_URL
+VITE_PUBLIC_APP_URL
+```
+
+Serverseitige Variablen und Secrets:
+
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+HOME_ASSISTANT_URL
+HOME_ASSISTANT_TOKEN_ENCRYPTION_KEY
+HOME_ASSISTANT_TICKET_WEBHOOK_SECRET
+HOME_ASSISTANT_TICKET_OWNER_ID
+FIREBASE_SERVICE_ACCOUNT_JSON
+SMTP_HOST
+SMTP_PORT
+SMTP_USER
+SMTP_PASS
+MAIL_FROM
+ADMIN_EMAIL
+```
+
+Secrets müssen mindestens für den Netlify-Kontext `production` gesetzt werden. Änderungen an Variablen werden erst nach einem neuen Deployment aktiv.
+
+## Home Assistant
+
+Die Benutzerverknüpfung erfolgt in HomeDesk über Einstellungen → Home Assistant. Refresh-Tokens werden serverseitig mit AES-256-GCM verschlüsselt gespeichert. Der Browser erhält keine Home-Assistant-Zugangsdaten.
+
+Automatische Tickets werden per `POST /.netlify/functions/home-assistant-ticket` mit `Authorization: Bearer HOME_ASSISTANT_TICKET_WEBHOOK_SECRET` erstellt:
+
+```json
+{
+  "title": "Heizung nicht erreichbar",
+  "description": "Die Entität ist seit zehn Minuten unavailable.",
+  "entity_id": "climate.heizung",
+  "area": "Wohnzimmer",
+  "source_reference": "heizung-offline"
+}
+```
+
+Dasselbe Ticket kann bei Entwarnung automatisch geschlossen werden:
+
+```json
+{
+  "event": "resolved",
+  "source_reference": "heizung-offline",
+  "resolution": "Home Assistant meldet die Heizung wieder als erreichbar."
+}
+```
+
+## Android-App
+
+Die Android-Paket-ID lautet `de.gamixlp.homedesk`. Die Firebase-Datei liegt unter `android/app/google-services.json`.
+
+Lokaler Build:
+
+```bash
+npm run android:sync
+cd android
+./gradlew assembleDebug
+```
+
+Bei jedem Push auf `main` erstellt GitHub Actions eine `HomeDesk.apk` und speichert sie für 30 Tage als Workflow-Artefakt.
+
+## Produktionsbetrieb
+
+- `ticket-automation` läuft über Netlify alle 15 Minuten.
+- Der Worker verarbeitet wiederkehrende Tickets, Eskalationen und fällige Wartungen.
+- Datenbankänderungen werden ausschließlich als neue Supabase-Migration eingecheckt.
+- Secrets gehören in Netlify beziehungsweise GitHub Secrets und niemals in Client-Code.
+- Vor einem Release sollten mindestens `npm ci`, `npm run build`, `npx netlify build` und der Android-Workflow erfolgreich sein.
+- Die produktiven HA-Endpunkte müssen ohne gültige Authentifizierung mit `401` antworten.
 
 ## Projektstruktur
 
 ```text
-src/
-  components/
-    dashboard/
-    layout/
-    tickets/
-    ui/
-  constants/
-  hooks/
-  lib/
-  pages/
-  routes/
-  styles/
-  types/
-supabase/
-  migrations/
-  seed.sql
+android/                 Capacitor-Android-Projekt
+netlify/functions/       API-, E-Mail-, HA- und Automationsfunktionen
+netlify/lib/             gemeinsame serverseitige Module
+src/components/          UI-, Layout- und Ticketkomponenten
+src/hooks/               Auth-, Einstellungs- und Datenhooks
+src/lib/                 Supabase-, Ticket-, Push- und HA-Zugriff
+src/pages/               Anwendungsseiten
+src/types/               TypeScript-Datenmodelle
+supabase/migrations/     versioniertes Datenbankschema
 ```
-
-## v3-Automation betreiben
-
-- `select public.escalate_overdue_tickets();` stündlich oder täglich per Supabase Cron ausführen.
-- `public.create_ha_ticket(...)` ausschließlich über eine authentifizierte Edge Function mit validiertem Home-Assistant-Webhook aufrufen.
-- Für Android Push `google-services.json` in `android/app/` hinterlegen und FCM-Zustellung serverseitig aus `push_devices` anstoßen.
-- Wiederholungen werden in `ticket_recurrences` geplant; ein Cron/Edge-Function-Worker erstellt zum `next_run_at` eine Kopie und berechnet den Folgetermin.
