@@ -56,3 +56,7 @@ coverage/
 # Cache
 .cache/
 .parcel-cache/
+
+# Local secrets and temporary files
+tmp/
+*-firebase-adminsdk-*.json

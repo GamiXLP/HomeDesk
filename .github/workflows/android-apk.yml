@@ -8,6 +8,7 @@ on:
       - main
       - 3-android-app
       - 4-mobile-ui-2.3
+      - homedesk-v3
 
 permissions:
   contents: read

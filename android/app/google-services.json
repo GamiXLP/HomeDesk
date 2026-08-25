@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "629387467675",
+    "project_id": "homedesk-f0305",
+    "storage_bucket": "homedesk-f0305.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:629387467675:android:f750c6abe8ad716017df3e",
+        "android_client_info": {
+          "package_name": "de.gamixlp.homedesk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBymJhjiq4xlt4d5p15hFi4VQErEmRNpoo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

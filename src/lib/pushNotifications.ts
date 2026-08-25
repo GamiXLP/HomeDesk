@@ -9,6 +9,14 @@ export async function enableAndroidPush(userId: string) {
   const current = await PushNotifications.checkPermissions();
   const permission = current.receive === 'prompt' ? await PushNotifications.requestPermissions() : current;
   if (permission.receive !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt.');
+  await PushNotifications.createChannel({
+    id: 'homedesk_tickets',
+    name: 'HomeDesk Tickets',
+    description: 'Ticketänderungen, Fälligkeiten und Eskalationen',
+    importance: 5,
+    visibility: 1,
+    vibration: true,
+  });
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
@@ -21,6 +29,15 @@ export async function enableAndroidPush(userId: string) {
     void PushNotifications.addListener('registrationError', (error) => { if (!settled) { settled = true; reject(new Error(error.error)); } });
     void PushNotifications.register();
   });
+}
+
+export async function listenForPushNavigation(onPath: (path: string) => void) {
+  if (!supportsNativePush()) return () => undefined;
+  const listener = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    const path = notification.data?.path;
+    if (typeof path === 'string' && path.startsWith('/app/tickets/')) onPath(path);
+  });
+  return () => { void listener.remove(); };
 }
 
 export async function disablePush(userId: string) {
